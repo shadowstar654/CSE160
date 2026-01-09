@@ -1,14 +1,26 @@
+<!-- Student Name: Angela -->
+<!-- Student Email: annyu@ucsc.edu -->
 <!DOCTYPE html>
-<html lang = "en">
-    <head>
-        <meta charset = "utf-8" />
-        <title> Draw a blue rectangle (canvas version)</title>
-    </head>
+<html>
+<head>
+   <meta charset="utf-8" />
+   <title> ASG0: Angela Yu</title>
+</head>
 
-    <body onload="main()">
-        <canvas id = "example" width="400" height = "400">
-            Please use a browser that supports "canvas"
-        </canvas>
-        <script src="asg0.js"></script>
-    </body>
+<body onload="main()">
+   <canvas id="asg0" width="400" height="400" style="border:1px solid #000000;">
+      Please use a browser that supports "canvas"
+   </canvas>
+   <br>
+
+   <label for="v1">v1: x</label>
+   <input type="text" id="xcoord" name="xcoord" value="2.25">
+   <label for="v1">y</label>
+   <input type="text" id="ycoord" name="ycoord" value="2.25">
+   <br>
+   <button onclick="handleDrawEvent()">Draw v1</button>
+
+   <script src="lib/cuon-matrix-cse160.js"></script>
+   <script src="asg0.js"></script>
+</body>
 </html>

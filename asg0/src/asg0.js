@@ -1,16 +1,43 @@
-// DrawTriangle.js (c) 2012 matsuda
-function main() {  
-  // Retrieve <canvas> element
-  var canvas = document.getElementById('example');  
-  if (!canvas) { 
+var ctx;
+var canvas;
+
+function main() {
+  canvas = document.getElementById('asg0');
+  if (!canvas) {
     console.log('Failed to retrieve the <canvas> element');
-    return false; 
-  } 
+    return false;
+  }
+  ctx = canvas.getContext('2d');
+  handleDrawEvent();
+}
 
-  // Get the rendering context for 2DCG
-  var ctx = canvas.getContext('2d');
+function getVector() {
+  var x1 = parseFloat(document.getElementById('xcoord').value);
+  if (isNaN(x1)){
+    x1 = 0;
+  }
 
-  // Draw a blue rectangle
-  ctx.fillStyle = 'rgba(0, 0, 255, 1.0)'; // Set color to blue
-  ctx.fillRect(120, 10, 150, 150);        // Fill a rectangle with the color
+  var y1 = parseFloat(document.getElementById('ycoord').value);
+  if (isNaN(y1)){
+    y1 = 0;
+  }
+  return new Vector3([x1, y1, 0]);
+}
+function drawVector(v, color) {
+  var originX = canvas.width / 2;
+  var originY = canvas.height / 2;
+  var scale = 20;
+  var x = v.elements[0] * scale;
+  var y = v.elements[1] * scale;
+  ctx.strokeStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(originX, originY);
+  ctx.lineTo(originX + x, originY - y); 
+  ctx.stroke();
+}
+function handleDrawEvent() {
+  ctx.fillStyle = 'black';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  var v1 = getVector();
+  drawVector(v1, 'red');
 }
