@@ -1,43 +1,45 @@
 <!-- Student Name: Angela -->
 <!-- Student Email: annyu@ucsc.edu -->
+<!-- Notes to Grader:  -->
+
 <!DOCTYPE html>
 <html>
 <head>
    <meta charset="utf-8" />
-   <title> ASG0: Angela Yu</title>
+   <title> ASG0: Angela Yu </title>
 </head>
 
-
 <body onload="main()">
+   <div style="margin-bottom: 10px;">
+      <p><strong>Student Name:
+      </strong> Angela Yu
+      </p>
+      <p><strong>Student Email:
+      </strong> annyu@ucsc.edu
+      </p>
+      <p><strong>Notes to Grader:
+      </strong>
+      </p>
+   </div>
    <canvas id="asg0" width="400" height="400" style="border:1px solid #000000;">
       Please use a browser that supports "canvas"
    </canvas>
    <br>
-   <label for="v1">
-      v1: x
-   </label>
+   <label for="v1">v1: x</label>
    <input type="text" id="xcoord" name="xcoord">
-   <label for="v1">
-      y
-   </label>
+   <label for="v1">y</label>
    <input type="text" id="ycoord" name="ycoord">
    <br>
-   <label for="v1">
-      v2: x
-   </label>
-   <input type="text" id="xcoord2" name="xcoord">
-   <label for="v1">
-      y
-   </label>
-   <input type="text" id="ycoord2" name="ycoord">
+   <label for="v2">v2: x</label>
+   <input type="text" id="xcoord2" name="xcoord2">
+   <label for="v2">y</label>
+   <input type="text" id="ycoord2" name="ycoord2">
    <br>
    <button onclick="handleDrawEvent()">
-      Draw
+      Draw Vectors
    </button>
-   <br> <br>
-   <label for="opt">
-      Operation:
-   </label>
+   <br><br>
+   <label for="opt">Operation:</label>
    <select id="opt">
      <option value="Add">Add</option>
      <option value="Subtract">Subtract</option>
@@ -54,11 +56,9 @@
    <input type="text" id="scalar" name="scalar">
    <br>
    <button onclick="handleDrawOperationEvent()">
-      Draw
+      Draw Operation
    </button>
    <script src="../lib/cuon-matrix-cse160.js"></script>
    <script src="asg0.js" type="text/javascript"></script>
 </body>
 </html>
-
-

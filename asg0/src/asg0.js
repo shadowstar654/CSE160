@@ -2,8 +2,6 @@
 //Student ucsc email: annyu@ucsc.edu
 var ctx;
 var canvas;
-
-
 function main() {
   canvas = document.getElementById('asg0');
   if (!canvas) {
@@ -11,9 +9,7 @@ function main() {
     return false;
   }
   ctx = canvas.getContext('2d');
-
-
-  // Black background
+  // Black Canvas
   ctx.fillStyle = 'black';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 }
@@ -24,14 +20,10 @@ function drawVector(v, color) {
   var originY = canvas.height / 2;
   var x = v.elements[0] * 20;
   var y = v.elements[1] * 20;
-
-
   ctx.moveTo(originX, originY);
   ctx.lineTo(originX + x, originY - y);
   ctx.stroke();
 }
-
-
 function getVectors() {
   var x1 = parseFloat(document.getElementById('xcoord').value);
   if (isNaN(x1)){
@@ -87,21 +79,15 @@ function handleDrawOperationEvent() {
     helperArea(v1, v2);
   }
 }
-
-
 // ~~ My Helper Functions ~~
 function helperAdd(v1, v2) {
   var v1x = v1.elements[0];
   var v1y = v1.elements[1];
   var v1z = v1.elements[2];
-
-
   var v3 = new Vector3([v1x, v1y, v1z]);
   v3.add(v2);
   drawVector(v3, 'green');
 }
-
-
 function helperSubtract(v1, v2) {
   var v1x = v1.elements[0];
   var v1y = v1.elements[1];
@@ -112,8 +98,6 @@ function helperSubtract(v1, v2) {
   v3.sub(v2);
   drawVector(v3, 'green');
 }
-
-
 function helperMultiply(v1, v2, s) {
   var v1x = v1.elements[0];
   var v1y = v1.elements[1];
@@ -177,5 +161,3 @@ function helperArea(v1, v2) {
   var area = crossMag / 2;
   console.log("Area of triangle: " + area.toFixed(2));
 }
-
-
