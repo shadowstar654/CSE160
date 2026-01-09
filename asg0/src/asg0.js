@@ -9,7 +9,6 @@ function main() {
     return false;
   }
   ctx = canvas.getContext('2d');
-  // Black Canvas
   ctx.fillStyle = 'black';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   var v1 = new Vector3([2.25, 2.25, 0]);
