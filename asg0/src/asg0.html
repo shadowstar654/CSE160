@@ -7,24 +7,58 @@
    <title> ASG0: Angela Yu</title>
 </head>
 
+
 <body onload="main()">
    <canvas id="asg0" width="400" height="400" style="border:1px solid #000000;">
       Please use a browser that supports "canvas"
    </canvas>
    <br>
-   <label for="v1">v1: x</label>
+   <label for="v1">
+      v1: x
+   </label>
    <input type="text" id="xcoord" name="xcoord">
-   <label for="v1">y</label>
+   <label for="v1">
+      y
+   </label>
    <input type="text" id="ycoord" name="ycoord">
    <br>
-   <label for="v2">v2: x</label>
-   <input type="text" id="xcoord2" name="xcoord2">
-   <label for="v2">y</label>
-   <input type="text" id="ycoord2" name="ycoord2">
+   <label for="v1">
+      v2: x
+   </label>
+   <input type="text" id="xcoord2" name="xcoord">
+   <label for="v1">
+      y
+   </label>
+   <input type="text" id="ycoord2" name="ycoord">
    <br>
-   <button onclick="handleDrawEvent()">Draw Vectors</button>
-
-   <script src="lib/cuon-matrix-cse160.js"></script>
-   <script type="text/javascript" src="asg0.js"></script>
+   <button onclick="handleDrawEvent()">
+      Draw
+   </button>
+   <br> <br>
+   <label for="opt">
+      Operation:
+   </label>
+   <select id="opt">
+     <option value="Add">Add</option>
+     <option value="Subtract">Subtract</option>
+     <option value="Multiply">Multiply</option>
+     <option value="Divide">Divide</option>
+     <option value="Mag">Magnitude</option>
+     <option value="Norm">Normalize</option>
+     <option value="Ang">Angle between</option>
+     <option value="Area">Area</option>
+   </select>
+   <label for="opt">
+      Scalar:
+   </label>
+   <input type="text" id="scalar" name="scalar">
+   <br>
+   <button onclick="handleDrawOperationEvent()">
+      Draw
+   </button>
+   <script src="../lib/cuon-matrix-cse160.js"></script>
+   <script src="asg0.js" type="text/javascript"></script>
 </body>
 </html>
+
+
