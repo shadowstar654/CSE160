@@ -58,15 +58,22 @@ function connectVariablesToGLSL(){
         return;
     }
 }
+//Constants
+const POINT = 0;
+const TRIANGLE = 1;
 // Globals related UI elements
 let g_selectedColor=[1.0, 1.0, 1.0, 1.0];
 let g_selectedSize = 5;
+let g_selectedType = POINT;
 //Set up actions for the HTML UI elements
 function addActionsForHtmlUI(){
     //Button Events (Shape Type)
     document.getElementById('green').onclick = function() { g_selectedColor = [0.0, 1.0, 0.0, 1.0]; };
     document.getElementById('red').onclick = function() { g_selectedColor = [1.0, 0.0, 0.0, 1.0]; };
     document.getElementById('clearButton').onclick = function() {g_shapesList = []; renderAllShapes();};
+
+    document.getElementById('pointButton').onclick = function() {g_selectedType = POINT};
+    document.getElementById('triButton').onclick = function() {g_selectedType = TRIANGLE};
     //Slider Events
     document.getElementById('redSlide').addEventListener('mouseup',   function() { g_selectedColor[0] = this.value/100; });
     document.getElementById('greenSlide').addEventListener('mouseup',   function() { g_selectedColor[1] = this.value/100; });
@@ -102,10 +109,15 @@ function click(ev) {
     //Extract the event click and return it in WebGL coordinates
     let [x,y] = convertCoordinatesEventTOGL(ev);
 
-    let point = new Point();
-    point.position=[x,y];
-    point.color=g_selectedColor.slice();
-    point.size=g_selectedSize;
+    let point;
+    if(g_selectedType == POINT){
+        point = new Point();
+    }else{
+        point = new Triangle();
+    }
+    point.position = [x,y];
+    point.color = g_selectedColor.slice();
+    point.size = g_selectedSize;
     g_shapesList.push(point);
     // Store the coordinates to g_points array
     //g_points.push([x, y]);
@@ -163,7 +175,13 @@ function renderAllShapes(){
         // gl.drawArrays(gl.POINTS, 0, 1);
     }
     var duration = performance.now() - startTime;
-    sendTextToHTML("numdot: " + len + " ms: " + Math.floor(duration) + " fps: " + Math.floor(10000/duration))
+    sendTextToHTML(
+        "numdot: " + len + 
+        " | ms: " + Math.floor(duration) + 
+        " | fps: " + Math.floor(10000 / duration),
+        "numdot"
+    );
+
 }
 //Set the text of a HTML element
 function sendTextToHTML(text, htmlID){
