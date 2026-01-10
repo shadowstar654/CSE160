@@ -27,7 +27,8 @@ function setupWebGL(){
     // Retrieve <canvas> element
     canvas = document.getElementById('webgl');
     // Get the rendering context for WebGL
-    gl = getWebGLContext(canvas);
+    //gl = getWebGLContext(canvas);
+    gl = canvas.getContext("webgl", {preserveDrawingBuffer: true});
     if (!gl) {
         console.log('Failed to get the rendering context for WebGL');
         return;
@@ -84,7 +85,8 @@ function main() {
   addActionsForHtmlUI();
   // Register function (event handler) to be called on a mouse press
   canvas.onmousedown = click;
-
+  //canvas.onmousemove = click;
+  canvas.onmousemove = function(ev) { if(ev.buttons == 1){click(ev)}};
   // Specify the color for clearing <canvas>
   gl.clearColor(0.0, 0.0, 0.0, 1.0);
 
@@ -137,6 +139,8 @@ function convertCoordinatesEventTOGL(ev){
     return ([x, y])
 }
 function renderAllShapes(){
+    // Check the time at the start of this function
+    var startTime = performance.now();
     // Clear <canvas>
     gl.clear(gl.COLOR_BUFFER_BIT);
     //var len = g_points.length;
@@ -158,4 +162,15 @@ function renderAllShapes(){
         // // Draw
         // gl.drawArrays(gl.POINTS, 0, 1);
     }
+    var duration = performance.now() - startTime;
+    sendTextToHTML("numdot: " + len + " ms: " + Math.floor(duration) + " fps: " + Math.floor(10000/duration))
+}
+//Set the text of a HTML element
+function sendTextToHTML(text, htmlID){
+    var htmlElm = document.getElementById(htmlID);
+    if(!htmlElm){
+        console.log("Failed to get " + htmlID + "from HTML");
+        return;
+    }
+    htmlElm.innerHTML = text;
 }
