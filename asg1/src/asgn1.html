@@ -1,116 +1,123 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>My Drawing Canvas</title>
-  <style>
-    #welcomeScreen {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: black;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 9999;
-      cursor: pointer;
-      transition: opacity 1s ease;
-    }
-    #welcomeScreen.hide {
-      opacity: 0;
-      pointer-events: none;
-    }
-    #welcomeContent {
-      text-align: center;
-      color: white;
-      font-family: "Courier New", monospace;
-    }
-    #welcomeTitle {
-      font-size: 42px;
-      margin-bottom: 20px;
-    }
-    #clickText {
-      font-size: 20px;
-      letter-spacing: 2px;
-      animation: blink 1s step-start infinite;
-    }
-    @keyframes blink {
-      50% { opacity: 0; }
-    }
-  </style>
-</head>
-<body onload="main()">
-  <div id="welcomeScreen" onclick="this.classList.add('hide')">
-    <div id="welcomeContent">
-      <h1 id="welcomeTitle">Welcome to my drawing canvas!</h1>
-      <p id="clickText">CLICK TO CONTINUE</p>
+  <head>
+    <meta charset="utf-8" />
+    <title>Change a point color</title>
+    <style>
+      #welcomeScreen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: #222;
+        color: #fff;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        font-family: monospace;
+        z-index: 1000;
+        cursor: pointer;
+        animation: fadeIn 2s;
+      }
+      #welcomeScreen h1 {
+        font-size: 3em;
+        margin: 0.2em;
+        animation: retroGlow 1.5s infinite alternate;
+      }
+      #welcomeScreen p {
+        font-size: 1.5em;
+        animation: blink 1s step-start infinite;
+      }
+      @keyframes blink {
+        50% { opacity: 0; }
+      }
+      @keyframes retroGlow {
+        0% { text-shadow: 0 0 5px #0ff, 0 0 10px #0ff, 0 0 15px #0ff; }
+        100% { text-shadow: 0 0 20px #0ff, 0 0 30px #0ff, 0 0 40px #0ff; }
+      }
+
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      #webgl {
+        display: none;
+        margin-bottom: 0.5em;
+      }
+    </style>
+  </head>
+  <body onload="main()">
+    <p><strong>Student Name:</strong> Angela Yu</p>
+    <p><strong>Email:</strong> annyu@ucsc.edu</p>
+    <p><strong>Github:</strong> 
+      <a href="https://github.com/shadowstar654/CSE160/tree/main/asg1" target="_blank">
+        https://github.com/shadowstar654/CSE160/tree/main/asg1
+      </a>
+    </p>
+    <p><strong>Notes to Grader:</strong> I added extra types of brushes to my drawing canvas and added a welcome home screen using a little CSS! For the line if you double click it automatically attaches as a straight line!</p>
+    <div id="welcomeScreen" onclick="this.style.display='none'; document.getElementById('webgl').style.display='block';">
+      <h1>Welcome to my drawing canvas!</h1>
+      <p>Click to continue</p>
     </div>
-  </div>
-  <canvas id="webgl" width="400" height="400">
-    Please use a browser that supports "canvas"
-  </canvas>
-
-  <p>
-    <button type="button" id="clearButton">Clear Canvas</button>
-  </p>
-
-  <p id="numdot">
-    My drawing shows a panda with my initials at the bottom right corner, AY in blue.
-    I apologize if it doesn't appear to look like AY, but I definitely tried!
-  </p>
-
-  <hr>
-  <h3>Drawing Mode</h3>
-  <p>
-    <button id="pointButton">Point</button>
-    <button id="triButton">Triangle</button>
-    <button id="circleButton">Circle</button>
-  </p>
-  <hr>
-  <h3>Bonus Drawing Mode</h3>
-  <p>
-    <button id="starButton">Star</button>
-    <button id="heartButton">Heart</button>
-    <button id="cloverButton">Four-Leaf Clover</button>
-    <button id="lineButton">Line</button>
-  </p>
-  <hr>
-  <h3>Shape Color</h3>
-  <p>
-    <button id="green">Green</button>
-    <button id="red">Red</button>
-  <p>
-    Red <input type="range" min="0" max="100" value="0" id="redSlide">
-    Green <input type="range" min="0" max="100" value="0" id="greenSlide">
-    Blue <input type="range" min="0" max="100" value="0" id="blueSlide">
-  </p>
-  <p>
-    Size <input type="range" min="5" max="40" value="5" id="sizeSlide">
-    Segments <input type="range" min="3" max="30" value="10" id="segmentSlide">
-  </p>
-  <hr>
-  <p>
-    <button id="pandaButton">Draw Panda</button>
-  </p>
-  <p>
-    Reference Drawing:
-    <a href="https://docs.google.com/document/d/13UcbdJbqIGMy41qTusd3F0dVRAkAX_59h9-m9R_2cl0/edit?tab=t.0" target="_blank">
-      Click here to view my original drawing
-    </a>
-  </p>
-  <!-- Scripts -->
-  <script src="../lib/webgl-utils.js"></script>
-  <script src="../lib/webgl-debug.js"></script>
-  <script src="../lib/cuon-utils.js"></script>
-  <script src="Triangle.js"></script>
-  <script src="Point.js"></script>
-  <script src="Circle.js"></script>
-  <script src="Star.js"></script>
-  <script src = "Line.js"></script>
-  <script src="Heart.js"></script>
-  <script src="asgn1.js"></script>
-
-</body>
+    <canvas id="webgl" width="400" height="400">
+      Please use a browser that supports "canvas"
+    </canvas>
+    <p>
+      <button type="button" id="clearButton">Clear Canvas</button>
+    </p>
+    <p id="numdot">
+      My drawing shows a panda with my initials at the bottom right corner, AY in blue. I apologize if it doesn't appear to look like AY but I definitely tried!
+    </p>
+    <h3>Choose colors</h3>
+    <p>
+      <button type="button" id="green">Green</button>
+      <button type="button" id="red">Red</button>
+    </p>
+    <h3>Drawing Mode</h3>
+    <p>
+      <button type="button" id="pointButton">Point</button>
+      <button type="button" id="triButton">Triangle</button>
+      <button type="button" id="circleButton">Circle</button>
+    </p>
+    <h3>Bonus drawing mode</h3>
+    <p>
+      <button type="button" id="starButton">Star</button>
+      <button type="button" id="heartButton">Heart</button>
+      <button type="button" id="cloverButton">Four-Leaf Clover</button>
+      <button type="button" id="lineButton">Line</button>
+    </p>
+    <h3>Shape color</h3>
+    <p>
+      Red <input type="range" min="0" max="100" value="0" class="slider" id="redSlide">
+      Green <input type="range" min="0" max="100" value="0" class="slider" id="greenSlide">
+      Blue <input type="range" min="0" max="100" value="0" class="slider" id="blueSlide">
+    </p>
+    <p>
+      Shape Size <input type="range" min="5" max="40" value="5" class="slider" id="sizeSlide">
+      (Circles) Segment Count <input type="range" min="3" max="12" value="10" class="slider" id="segmentSlide">
+    </p>
+    <p>
+      <button type="button" id="pandaButton">Draw Panda</button>
+    </p>
+    <p>
+      Reference Drawing: 
+      <a href="https://docs.google.com/document/d/13UcbdJbqIGMy41qTusd3F0dVRAkAX_59h9-m9R_2cl0/edit?tab=t.0" target="_blank">
+        Click here to view my original drawing
+      </a>
+    </p>
+    <script src="../lib/webgl-utils.js"></script>
+    <script src="../lib/webgl-debug.js"></script>
+    <script src="../lib/cuon-utils.js"></script>
+    <script src="Triangle.js"></script>
+    <script src="Point.js"></script>
+    <script src="Circle.js"></script>
+    <script src="Star.js"></script>
+    <script src="Heart.js"></script>
+    <script src="Clover.js"></script>
+    <script src="Line.js"></script>
+    <script src="asgn1.js"></script>
+  </body>
 </html>
