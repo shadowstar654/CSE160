@@ -63,10 +63,8 @@ function createStarAt(x, y, size) {
     const star = new Star();
     const outerR = size / 200;
     const innerR = outerR * 0.45;
-
     star.color = g_selectedColor.slice();
     star.vertices = [];
-
     const points = [];
     for (let i = 0; i < 10; i++) {
         const angle = Math.PI / 2 + i * Math.PI / 5;
@@ -76,17 +74,10 @@ function createStarAt(x, y, size) {
             y + r * Math.sin(angle)
         ]);
     }
-
-    // Triangle fan from center
     for (let i = 0; i < 10; i++) {
         const p1 = points[i];
         const p2 = points[(i + 1) % 10];
-
-        star.vertices.push(
-            x, y,
-            p1[0], p1[1],
-            p2[0], p2[1]
-        );
+        star.vertices.push(x, y, p1[0], p1[1], p2[0], p2[1]);
     }
 
     g_shapesList.push(star);
@@ -94,57 +85,28 @@ function createStarAt(x, y, size) {
 function createHeartAt(x, y, size) {
     const heart = new Heart();
     const r = size / 200;
-
     heart.color = g_selectedColor.slice();
     heart.vertices = [];
-
     const left = [x - r * 0.5, y + r * 0.3];
     const right = [x + r * 0.5, y + r * 0.3];
     const bottom = [x, y - r * 0.7];
-
-    // Left lobe
-    heart.vertices.push(
-        x, y,
-        left[0], left[1],
-        x - r * 0.8, y
-    );
-
-    // Right lobe
-    heart.vertices.push(
-        x, y,
-        right[0], right[1],
-        x + r * 0.8, y
-    );
-
-    // Bottom triangle
-    heart.vertices.push(
-        x, y,
-        x - r * 0.6, y,
-        bottom[0], bottom[1]
-    );
-
-    heart.vertices.push(
-        x, y,
-        x + r * 0.6, y,
-        bottom[0], bottom[1]
-    );
-
+    heart.vertices.push(x, y, left[0], left[1], x - r * 0.8, y);
+    heart.vertices.push(x, y, right[0], right[1], x + r * 0.8, y);
+    heart.vertices.push(x, y, x - r * 0.6, y, bottom[0], bottom[1]);
+    heart.vertices.push(x, y, x + r * 0.6, y, bottom[0], bottom[1]);
     g_shapesList.push(heart);
 }
 function createCloverAt(x, y, size) {
     const leafSize = size * 0.01;
-    // Shades of green
     const green1 = [0, 0.8, 0, 1];
     const green2 = [0, 0.6, 0, 1];
     const stemColor = [0, 0, 0, 1];
-
     const leaves = [
         { dx: 0, dy: leafSize, color: green1 }, 
         { dx: 0, dy: -leafSize, color: green2 },
         { dx: -leafSize, dy: 0, color: green1 },
         { dx: leafSize, dy: 0, color: green2 }
     ];
-
     leaves.forEach(leaf => {
         const l = new Heart();
         const lx = leaf.dx + x;
