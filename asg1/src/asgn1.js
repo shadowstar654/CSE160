@@ -180,11 +180,9 @@ function addActionsForHtmlUI(){
     document.getElementById('pandaButton').onclick = function() {
         drawPanda();
     };
-
     document.getElementById('redSlide').addEventListener('input', function() {
         g_selectedColor[0] = this.value / 100;
     });
-
     document.getElementById('greenSlide').addEventListener('input', function() {
         g_selectedColor[1] = this.value / 100;
     });
