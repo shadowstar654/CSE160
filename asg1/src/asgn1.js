@@ -243,6 +243,12 @@ function drawPanda() {
     tri = new Triangle(); tri.vertices = [0.52,0.57, 0.37,0.57, 0.445,0.42]; tri.color=[0,0,0,1]; g_shapesList.push(tri);
     tri = new Triangle(); tri.vertices = [-0.48,0.53, -0.42,0.53, -0.45,0.5]; tri.color=[1,1,1,1]; g_shapesList.push(tri);
     tri = new Triangle(); tri.vertices = [0.48,0.53, 0.42,0.53, 0.45,0.5]; tri.color=[1,1,1,1]; g_shapesList.push(tri);
+    // Inner Ears (pink)
+    const earPink = [1.0, 0.7, 0.8, 1.0];
+
+    tri = new Triangle(); tri.vertices = [-0.47,0.55, -0.42,0.55, -0.445,0.49]; tri.color=earPink.slice(); g_shapesList.push(tri);
+    tri = new Triangle(); tri.vertices = [0.47,0.55, 0.42,0.55, 0.445,0.49]; tri.color=earPink.slice(); g_shapesList.push(tri);
+
     // Eye patch
     tri = new Triangle(); tri.vertices = [-0.22,0.27, -0.08,0.27, -0.145,0.12]; tri.color=[0,0,0,1]; g_shapesList.push(tri);
     tri = new Triangle(); tri.vertices = [-0.22,0.17, -0.08,0.17, -0.145,0.12]; tri.color=[0,0,0,1]; g_shapesList.push(tri);
@@ -256,11 +262,22 @@ function drawPanda() {
     // Body
     tri = new Triangle(); tri.vertices = [-0.35,-0.2, 0.35,-0.2, 0,-0.8]; tri.color=[1,1,1,1]; g_shapesList.push(tri);
     // Arms
-    tri = new Triangle(); tri.vertices = [-0.5,-0.3, -0.35,-0.3, -0.4,-0.6]; tri.color=[0,0,0,1]; g_shapesList.push(tri);
-    tri = new Triangle(); tri.vertices = [0.5,-0.3, 0.35,-0.3, 0.4,-0.6]; tri.color=[0,0,0,1]; g_shapesList.push(tri);
+    const armWhite = [1,1,1,1];
+    tri = new Triangle();
+    tri.vertices = [-0.55,-0.1, -0.45,-0.1, -0.5,-0.4];
+    tri.color = armWhite.slice();
+    g_shapesList.push(tri);
+    tri = new Triangle();
+    tri.vertices = [0.55,-0.1, 0.45,-0.1, 0.5,-0.4];
+    tri.color = armWhite.slice();
+    g_shapesList.push(tri);
     // Legs
     tri = new Triangle(); tri.vertices = [-0.2,-0.8, -0.05,-0.8, -0.125,-0.65]; tri.color=[0,0,0,1]; g_shapesList.push(tri);
     tri = new Triangle(); tri.vertices = [0.2,-0.8, 0.05,-0.8, 0.125,-0.65]; tri.color=[0,0,0,1]; g_shapesList.push(tri);
+    //Feet
+    const footWhite = [1,1,1,1];
+    tri = new Triangle(); tri.vertices = [-0.25,-0.82, -0.05,-0.82, -0.15,-0.9]; tri.color=footWhite.slice(); g_shapesList.push(tri);
+    tri = new Triangle(); tri.vertices = [0.25,-0.82, 0.05,-0.82, 0.15,-0.9]; tri.color=footWhite.slice(); g_shapesList.push(tri);
     // Bamboo
     const bambooColor = [0,0.6,0,1];
     // Stalk
@@ -272,7 +289,102 @@ function drawPanda() {
     tri = new Triangle(); tri.vertices = [0.61,0.7, 0.61,0.8, 0.64,0.75]; tri.color=bambooColor; g_shapesList.push(tri);
     tri = new Triangle(); tri.vertices = [0.61,0.55, 0.61,0.65, 0.57,0.6]; tri.color=bambooColor; g_shapesList.push(tri);
     tri = new Triangle(); tri.vertices = [0.61,0.65, 0.61,0.75, 0.58,0.7]; tri.color=bambooColor; g_shapesList.push(tri);
+    drawWatermarkAY();
     renderAllShapes();
 }
-
-
+function drawWatermarkAY() {
+    const color = [0.2, 0.4, 1.0, 1.0];
+    const holeColor = [0, 0, 0, 1];
+    let tri;
+    const baseX = 0.65;
+    const baseY = -0.9;
+    const spacing = 0.015;
+    const triSize = 10;
+    //My A
+    const Apattern = [
+        // Peak top
+        [2,5],
+        [1,4],[2,4],[3,4],
+        // Left leg
+        [0,0],[0,1],[0,2],[0,3],
+        [1,1],[1,2],[1,3],
+        // Right leg
+        [4,0],[4,1],[4,2],[4,3],
+        [3,1],[3,2],[3,3],
+        // Cross
+        [1,2],[2,2],[3,2]
+    ];
+    Apattern.forEach(([dx, dy]) => {
+        tri = new Triangle();
+        tri.position = [baseX + dx * spacing, baseY + dy * spacing];
+        tri.color = color.slice();
+        tri.size = triSize;
+        g_shapesList.push(tri);
+    });
+    // Need a hole through A, so it doesn't look like M
+    tri = new Triangle();
+    tri.position = [baseX + 2 * spacing, baseY + 3 * spacing];
+    tri.color = holeColor.slice();
+    tri.size = triSize * 0.8;
+    g_shapesList.push(tri);
+    drawWatermarkY();
+}
+function drawWatermarkY() {
+    const triSize = 0.015;
+    const spacing = 0.03;
+    const blue = [0.2, 0.4, 1.0, 1.0];
+    const black = [0, 0, 0, 1];
+    let tri;
+    const YbaseX = 0.78;
+    const YbaseY = -0.8;
+    // Left branch of Y
+    for (let i = 0; i < 3; i++) {
+        tri = new Triangle();
+        tri.vertices = [
+            YbaseX, YbaseY + i * spacing,
+            YbaseX + triSize * 1.2, YbaseY + (i + 1) * spacing,
+            YbaseX + triSize * 0.6, YbaseY + i * spacing
+        ];
+        tri.color = blue.slice();
+        g_shapesList.push(tri);
+    }
+    // Right branch of Y
+    for (let i = 0; i < 3; i++) {
+        tri = new Triangle();
+        tri.vertices = [
+            YbaseX + 2 * triSize, YbaseY + i * spacing,
+            YbaseX + 3.2 * triSize, YbaseY + (i + 1) * spacing,
+            YbaseX + 2.6 * triSize, YbaseY + i * spacing
+        ];
+        tri.color = blue.slice();
+        g_shapesList.push(tri);
+    }
+    // Bottom stem
+    for (let i = 0; i < 4; i++) {
+        tri = new Triangle();
+        tri.vertices = [
+            YbaseX + triSize, YbaseY - i * spacing,
+            YbaseX + 2 * triSize, YbaseY - i * spacing,
+            YbaseX + 1.5 * triSize, YbaseY - (i + 1) * spacing
+        ];
+        tri.color = blue.slice();
+        g_shapesList.push(tri);
+    }
+    // Need black triangles here to make separation for Y more clear
+    const topBlackOffsets = [
+        [1.2, 3.2],
+        [1.25, 3.4],
+        [1.3, 3.5],
+        [1.35, 3.3]
+    ];
+    topBlackOffsets.forEach(([dx, dy]) => {
+        tri = new Triangle();
+        tri.vertices = [
+            YbaseX + dx * triSize, YbaseY + dy * spacing,
+            YbaseX + (dx + 0.2) * triSize, YbaseY + dy * spacing,
+            YbaseX + (dx + 0.1) * triSize, YbaseY + (dy + 0.2) * spacing
+        ];
+        tri.color = black.slice();
+        g_shapesList.push(tri);
+    });
+}
