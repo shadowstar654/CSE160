@@ -131,6 +131,49 @@ function createHeartAt(x, y, size) {
 
     g_shapesList.push(heart);
 }
+function createCloverAt(x, y, size) {
+    const leafSize = size * 0.01;
+    // Shades of green
+    const green1 = [0, 0.8, 0, 1];
+    const green2 = [0, 0.6, 0, 1];
+    const stemColor = [0, 0, 0, 1];
+
+    const leaves = [
+        { dx: 0, dy: leafSize, color: green1 }, 
+        { dx: 0, dy: -leafSize, color: green2 },
+        { dx: -leafSize, dy: 0, color: green1 },
+        { dx: leafSize, dy: 0, color: green2 }
+    ];
+
+    leaves.forEach(leaf => {
+        const l = new Heart();
+        const lx = leaf.dx + x;
+        const ly = leaf.dy + y;
+        const s = leafSize;
+        l.vertices = [
+            lx, ly + s * 0.5,
+            lx - s * 0.5, ly,
+            lx, ly - s * 0.5,
+            lx, ly + s * 0.5,
+            lx + s * 0.5, ly,
+            lx, ly - s * 0.5,
+            lx - s * 0.5, ly,
+            lx + s * 0.5, ly,
+            lx, ly - s * 0.7
+        ];
+        l.color = leaf.color.slice();
+        g_shapesList.push(l);
+    });
+    // My stem
+    const stem = new Triangle();
+    stem.vertices = [
+        x - leafSize * 0.1, y - leafSize * 0.8,
+        x + leafSize * 0.1, y - leafSize * 0.8,
+        x, y - leafSize * 1.2
+    ];
+    stem.color = stemColor.slice();
+    g_shapesList.push(stem);
+}
 
 // Constants
 const POINT = 0;
@@ -138,6 +181,8 @@ const TRIANGLE = 1;
 const CIRCLE = 2;
 const STAR = 3;
 const HEART = 4;
+const CLOVER = 5;
+const LINE = 6;
 
 // Globals related UI elements
 let g_selectedColor = [1.0, 1.0, 1.0, 1.0];
@@ -171,6 +216,8 @@ function addActionsForHtmlUI(){
     document.getElementById('circleButton').onclick = function() { g_selectedType = CIRCLE };
     document.getElementById('starButton').onclick = function() { g_selectedType = STAR };
     document.getElementById('heartButton').onclick = function() { g_selectedType = HEART };
+    document.getElementById('cloverButton').onclick = function() { g_selectedType = CLOVER };
+    document.getElementById('lineButton').onclick = function() { g_selectedType = LINE };
 
     //Slider Events
     // document.getElementById('redSlide').addEventListener('mouseup',   function() { g_selectedColor[0] = this.value/100; });
@@ -214,7 +261,7 @@ function main() {
   gl.clearColor(0.0, 0.0, 0.0, 1.0);
   // Clear <canvas>
   gl.clear(gl.COLOR_BUFFER_BIT);
-  document.getElementById('redSlide').value   = g_selectedColor[0] * 100;
+  document.getElementById('redSlide').value = g_selectedColor[0] * 100;
   document.getElementById('greenSlide').value = g_selectedColor[1] * 100;
   document.getElementById('blueSlide').value  = g_selectedColor[2] * 100;
 }
@@ -223,21 +270,45 @@ var g_shapesList = [];
 // var g_points = [];  // The array for the position of a mouse press
 // var g_colors = [];  // The array to store the color of a point
 // var g_sizes =  []; // The array to store the size of a point
+let lineStart = null; // store starting point of line
+
 function click(ev) {
     let [x, y] = convertCoordinatesEventTOGL(ev);
 
+    // Bonus shapes first
     if (g_selectedType === STAR) {
         createStarAt(x, y, g_selectedSize);
         renderAllShapes();
         return;
     }
-
     if (g_selectedType === HEART) {
         createHeartAt(x, y, g_selectedSize);
         renderAllShapes();
         return;
     }
+    if (g_selectedType === CLOVER) {
+        createCloverAt(x, y, g_selectedSize);
+        renderAllShapes();
+        return;
+    }
 
+    // Line drawing: needs two clicks
+    if (g_selectedType === LINE) {
+        if (!lineStart) {
+            lineStart = [x, y]; // first click = start
+            return; // wait for second click
+        } else {
+            const line = new Line();
+            line.position = [...lineStart, x, y]; // [x1, y1, x2, y2]
+            line.color = g_selectedColor.slice();
+            g_shapesList.push(line);
+            lineStart = null; // reset for next line
+            renderAllShapes();
+            return;
+        }
+    }
+
+    // Other shapes: Point, Triangle, Circle
     let point;
     if (g_selectedType === POINT) {
         point = new Point();
