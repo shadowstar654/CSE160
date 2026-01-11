@@ -82,19 +82,16 @@ function addActionsForHtmlUI(){
         document.getElementById('greenSlide').value = 0;
         document.getElementById('blueSlide').value = 0;
     };
-
     document.getElementById('green').onclick = function() {
         g_selectedColor = [0.0, 1.0, 0.0, 1.0];
         document.getElementById('redSlide').value = 0;
         document.getElementById('greenSlide').value = 100;
         document.getElementById('blueSlide').value = 0;
     };
-
     document.getElementById('clearButton').onclick = function() {
         g_shapesList = [];
         renderAllShapes();
     };
-
     document.getElementById('pointButton').onclick = function() { g_selectedType = POINT };
     document.getElementById('triButton').onclick = function() { g_selectedType = TRIANGLE };
     document.getElementById('circleButton').onclick = function() { g_selectedType = CIRCLE };
@@ -102,6 +99,11 @@ function addActionsForHtmlUI(){
     // document.getElementById('redSlide').addEventListener('mouseup',   function() { g_selectedColor[0] = this.value/100; });
     // document.getElementById('greenSlide').addEventListener('mouseup',   function() { g_selectedColor[1] = this.value/100; });
     // document.getElementById('blueSlide').addEventListener('mouseup',   function() { g_selectedColor[2] = this.value/100; });
+    // Panda button
+    document.getElementById('pandaButton').onclick = function() {
+        drawPanda();
+    };
+
     document.getElementById('redSlide').addEventListener('input', function() {
         g_selectedColor[0] = this.value / 100;
     });
@@ -113,11 +115,11 @@ function addActionsForHtmlUI(){
     document.getElementById('blueSlide').addEventListener('input', function() {
         g_selectedColor[2] = this.value / 100;
     });
-    // Size Slider Events
+
     document.getElementById('sizeSlide').addEventListener('input', function() {
         g_selectedSize = this.value;
     });
-    // Segment Slider Events
+
     document.getElementById('segmentSlide').addEventListener('input', function() {
         g_selectedSegments = this.value;
     });
@@ -147,7 +149,6 @@ var g_shapesList = [];
 // var g_colors = [];  // The array to store the color of a point
 // var g_sizes =  []; // The array to store the size of a point
 function click(ev) {
-    //Extract the event click and return it in WebGL coordinates
     let [x, y] = convertCoordinatesEventTOGL(ev);
 
     let point;
@@ -165,7 +166,7 @@ function click(ev) {
     point.size = g_selectedSize;
 
     g_shapesList.push(point);
-    // Store the coordinates to g_points array
+     // Store the coordinates to g_points array
     //g_points.push([x, y]);
 
     // Store a COPY of the currently selected color
@@ -187,10 +188,9 @@ function click(ev) {
 }
 
 function convertCoordinatesEventTOGL(ev){
-    var x = ev.clientX;  // x coordinate of a mouse pointer
-    var y = ev.clientY;  // y coordinate of a mouse pointer
+    var x = ev.clientX; // x coordinate of a mouse pointer
+    var y = ev.clientY; // y coordinate of a mouse pointer
     var rect = ev.target.getBoundingClientRect();
-
     x = ((x - rect.left) - canvas.width/2)/(canvas.width/2);
     y = (canvas.height/2 - (y - rect.top))/(canvas.height/2);
 
@@ -199,9 +199,7 @@ function convertCoordinatesEventTOGL(ev){
 
 function renderAllShapes(){
     var startTime = performance.now();
-    // Clear <canvas>
     gl.clear(gl.COLOR_BUFFER_BIT);
-    //var len = g_points.length;
     var len = g_shapesList.length;
     for(var i = 0; i < len; i++) {
         g_shapesList[i].render();
@@ -228,3 +226,53 @@ function renderAllShapes(){
         "numdot"
     );
 }
+
+//My Panda
+function drawPanda() {
+    let tri;
+    //Head
+    tri = new Triangle(); tri.vertices = [-0.38,0.48, 0.38,0.48, 0.0,0.1]; tri.color=[1,1,1,1]; g_shapesList.push(tri);
+    tri = new Triangle(); tri.vertices = [-0.38,0.48, 0.0,0.1, -0.38,-0.1]; tri.color=[1,1,1,1]; g_shapesList.push(tri);
+    tri = new Triangle(); tri.vertices = [0.38,0.48, 0.0,0.1, 0.38,-0.1]; tri.color=[1,1,1,1]; g_shapesList.push(tri);
+    tri = new Triangle(); tri.vertices = [-0.28,-0.1, 0.28,-0.1, 0,-0.28]; tri.color=[1,1,1,1]; g_shapesList.push(tri);
+    // Cheeks
+    tri = new Triangle(); tri.vertices = [-0.25,0.05, -0.05,0.05, -0.15,-0.05]; tri.color=[1,1,1,1]; g_shapesList.push(tri);
+    tri = new Triangle(); tri.vertices = [0.25,0.05, 0.05,0.05, 0.15,-0.05]; tri.color=[1,1,1,1]; g_shapesList.push(tri);
+    // Ears
+    tri = new Triangle(); tri.vertices = [-0.52,0.57, -0.37,0.57, -0.445,0.42]; tri.color=[0,0,0,1]; g_shapesList.push(tri);
+    tri = new Triangle(); tri.vertices = [0.52,0.57, 0.37,0.57, 0.445,0.42]; tri.color=[0,0,0,1]; g_shapesList.push(tri);
+    tri = new Triangle(); tri.vertices = [-0.48,0.53, -0.42,0.53, -0.45,0.5]; tri.color=[1,1,1,1]; g_shapesList.push(tri);
+    tri = new Triangle(); tri.vertices = [0.48,0.53, 0.42,0.53, 0.45,0.5]; tri.color=[1,1,1,1]; g_shapesList.push(tri);
+    // Eye patch
+    tri = new Triangle(); tri.vertices = [-0.22,0.27, -0.08,0.27, -0.145,0.12]; tri.color=[0,0,0,1]; g_shapesList.push(tri);
+    tri = new Triangle(); tri.vertices = [-0.22,0.17, -0.08,0.17, -0.145,0.12]; tri.color=[0,0,0,1]; g_shapesList.push(tri);
+    tri = new Triangle(); tri.vertices = [0.22,0.27, 0.08,0.27, 0.145,0.12]; tri.color=[0,0,0,1]; g_shapesList.push(tri);
+    tri = new Triangle(); tri.vertices = [0.22,0.17, 0.08,0.17, 0.145,0.12]; tri.color=[0,0,0,1]; g_shapesList.push(tri);
+    // Eye
+    tri = new Triangle(); tri.vertices = [-0.14,0.21, -0.11,0.21, -0.125,0.155]; tri.color=[1,1,1,1]; g_shapesList.push(tri);
+    tri = new Triangle(); tri.vertices = [0.14,0.21, 0.11,0.21, 0.125,0.155]; tri.color=[1,1,1,1]; g_shapesList.push(tri);
+    // Nose
+    tri = new Triangle(); tri.vertices = [-0.05,-0.05, 0.05,-0.05, 0,-0.15]; tri.color=[0,0,0,1]; g_shapesList.push(tri);
+    // Body
+    tri = new Triangle(); tri.vertices = [-0.35,-0.2, 0.35,-0.2, 0,-0.8]; tri.color=[1,1,1,1]; g_shapesList.push(tri);
+    // Arms
+    tri = new Triangle(); tri.vertices = [-0.5,-0.3, -0.35,-0.3, -0.4,-0.6]; tri.color=[0,0,0,1]; g_shapesList.push(tri);
+    tri = new Triangle(); tri.vertices = [0.5,-0.3, 0.35,-0.3, 0.4,-0.6]; tri.color=[0,0,0,1]; g_shapesList.push(tri);
+    // Legs
+    tri = new Triangle(); tri.vertices = [-0.2,-0.8, -0.05,-0.8, -0.125,-0.65]; tri.color=[0,0,0,1]; g_shapesList.push(tri);
+    tri = new Triangle(); tri.vertices = [0.2,-0.8, 0.05,-0.8, 0.125,-0.65]; tri.color=[0,0,0,1]; g_shapesList.push(tri);
+    // Bamboo
+    const bambooColor = [0,0.6,0,1];
+    // Stalk
+    tri = new Triangle(); tri.vertices = [0.6,-0.8, 0.62,-0.8, 0.61,0.2]; tri.color=bambooColor; g_shapesList.push(tri);
+    tri = new Triangle(); tri.vertices = [0.6,-0.6, 0.62,-0.6, 0.61,0.4]; tri.color=bambooColor; g_shapesList.push(tri);
+    tri = new Triangle(); tri.vertices = [0.6,-0.4, 0.62,-0.4, 0.61,0.6]; tri.color=bambooColor; g_shapesList.push(tri);
+    // Leaves
+    tri = new Triangle(); tri.vertices = [0.61,0.6, 0.61,0.7, 0.65,0.65]; tri.color=bambooColor; g_shapesList.push(tri);
+    tri = new Triangle(); tri.vertices = [0.61,0.7, 0.61,0.8, 0.64,0.75]; tri.color=bambooColor; g_shapesList.push(tri);
+    tri = new Triangle(); tri.vertices = [0.61,0.55, 0.61,0.65, 0.57,0.6]; tri.color=bambooColor; g_shapesList.push(tri);
+    tri = new Triangle(); tri.vertices = [0.61,0.65, 0.61,0.75, 0.58,0.7]; tri.color=bambooColor; g_shapesList.push(tri);
+    renderAllShapes();
+}
+
+
