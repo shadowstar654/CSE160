@@ -59,11 +59,85 @@ function connectVariablesToGLSL(){
         return;
     }
 }
+function createStarAt(x, y, size) {
+    const star = new Star();
+    const outerR = size / 200;
+    const innerR = outerR * 0.45;
+
+    star.color = g_selectedColor.slice();
+    star.vertices = [];
+
+    const points = [];
+    for (let i = 0; i < 10; i++) {
+        const angle = Math.PI / 2 + i * Math.PI / 5;
+        const r = (i % 2 === 0) ? outerR : innerR;
+        points.push([
+            x + r * Math.cos(angle),
+            y + r * Math.sin(angle)
+        ]);
+    }
+
+    // Triangle fan from center
+    for (let i = 0; i < 10; i++) {
+        const p1 = points[i];
+        const p2 = points[(i + 1) % 10];
+
+        star.vertices.push(
+            x, y,
+            p1[0], p1[1],
+            p2[0], p2[1]
+        );
+    }
+
+    g_shapesList.push(star);
+}
+function createHeartAt(x, y, size) {
+    const heart = new Heart();
+    const r = size / 200;
+
+    heart.color = g_selectedColor.slice();
+    heart.vertices = [];
+
+    const left = [x - r * 0.5, y + r * 0.3];
+    const right = [x + r * 0.5, y + r * 0.3];
+    const bottom = [x, y - r * 0.7];
+
+    // Left lobe
+    heart.vertices.push(
+        x, y,
+        left[0], left[1],
+        x - r * 0.8, y
+    );
+
+    // Right lobe
+    heart.vertices.push(
+        x, y,
+        right[0], right[1],
+        x + r * 0.8, y
+    );
+
+    // Bottom triangle
+    heart.vertices.push(
+        x, y,
+        x - r * 0.6, y,
+        bottom[0], bottom[1]
+    );
+
+    heart.vertices.push(
+        x, y,
+        x + r * 0.6, y,
+        bottom[0], bottom[1]
+    );
+
+    g_shapesList.push(heart);
+}
 
 // Constants
 const POINT = 0;
 const TRIANGLE = 1;
 const CIRCLE = 2;
+const STAR = 3;
+const HEART = 4;
 
 // Globals related UI elements
 let g_selectedColor = [1.0, 1.0, 1.0, 1.0];
@@ -95,6 +169,9 @@ function addActionsForHtmlUI(){
     document.getElementById('pointButton').onclick = function() { g_selectedType = POINT };
     document.getElementById('triButton').onclick = function() { g_selectedType = TRIANGLE };
     document.getElementById('circleButton').onclick = function() { g_selectedType = CIRCLE };
+    document.getElementById('starButton').onclick = function() { g_selectedType = STAR };
+    document.getElementById('heartButton').onclick = function() { g_selectedType = HEART };
+
     //Slider Events
     // document.getElementById('redSlide').addEventListener('mouseup',   function() { g_selectedColor[0] = this.value/100; });
     // document.getElementById('greenSlide').addEventListener('mouseup',   function() { g_selectedColor[1] = this.value/100; });
@@ -151,12 +228,24 @@ var g_shapesList = [];
 function click(ev) {
     let [x, y] = convertCoordinatesEventTOGL(ev);
 
+    if (g_selectedType === STAR) {
+        createStarAt(x, y, g_selectedSize);
+        renderAllShapes();
+        return;
+    }
+
+    if (g_selectedType === HEART) {
+        createHeartAt(x, y, g_selectedSize);
+        renderAllShapes();
+        return;
+    }
+
     let point;
-    if(g_selectedType == POINT){
+    if (g_selectedType === POINT) {
         point = new Point();
-    } else if(g_selectedType == TRIANGLE){
+    } else if (g_selectedType === TRIANGLE) {
         point = new Triangle();
-    } else {
+    } else if (g_selectedType === CIRCLE) {
         point = new Circle();
         point.segments = g_selectedSegments;
     }
@@ -166,24 +255,6 @@ function click(ev) {
     point.size = g_selectedSize;
 
     g_shapesList.push(point);
-     // Store the coordinates to g_points array
-    //g_points.push([x, y]);
-
-    // Store a COPY of the currently selected color
-    //g_colors.push(g_selectedColor);
-    //g_colors.push(g_selectedColor.slice());
-
-    // Store the size to the g_sizes array
-    //g_sizes.push(g_selectedSize);
-    // Store the coordinates to g_points array
-    // if (x >= 0.0 && y >= 0.0) {      // First quadrant
-    //     g_colors.push([1.0, 0.0, 0.0, 1.0]);  // Red
-    // } else if (x < 0.0 && y < 0.0) { // Third quadrant
-    //     g_colors.push([0.0, 1.0, 0.0, 1.0]);  // Green
-    // } else {                         // Others
-    //     g_colors.push([1.0, 1.0, 1.0, 1.0]);  // White
-    // }
-
     renderAllShapes();
 }
 

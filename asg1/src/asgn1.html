@@ -1,55 +1,117 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>Change a point color</title>
-  </head>
+<head>
+  <meta charset="utf-8" />
+  <title>My Drawing Canvas</title>
+  <style>
+    #welcomeScreen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: black;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      cursor: pointer;
+      transition: opacity 1s ease;
+    }
+    #welcomeScreen.hide {
+      opacity: 0;
+      pointer-events: none;
+    }
+    #welcomeContent {
+      text-align: center;
+      color: white;
+      font-family: "Courier New", monospace;
+    }
+    #welcomeTitle {
+      font-size: 42px;
+      margin-bottom: 20px;
+    }
+    #clickText {
+      font-size: 20px;
+      letter-spacing: 2px;
+      animation: blink 1s step-start infinite;
+    }
+    @keyframes blink {
+      50% { opacity: 0; }
+    }
+  </style>
+</head>
+<body onload="main()">
+  <div id="welcomeScreen" onclick="this.classList.add('hide')">
+    <div id="welcomeContent">
+      <h1 id="welcomeTitle">Welcome to my drawing canvas!</h1>
+      <p id="clickText">CLICK TO CONTINUE</p>
+    </div>
+  </div>
+  <canvas id="webgl" width="400" height="400">
+    Please use a browser that supports "canvas"
+  </canvas>
 
-  <body onload="main()">
-    <canvas id="webgl" width="400" height="400">
-      Please use a browser that supports "canvas"
-    </canvas>
-    <p>
-    <p id="numdot"> XXX </p>
-    <button type="button" id="green">Green</button>
-    <button type="button" id="red">Red</button>
-    <button type="button" id="clearButton">Clear</button>
-    <p>
+  <p>
+    <button type="button" id="clearButton">Clear Canvas</button>
+  </p>
 
-    <button type="button" id="pointButton">Point</button>
-    <button type="button" id="triButton">Triangle</button>
-    <button type="button" id="circleButton">Circle</button>
-    <p>
+  <p id="numdot">
+    My drawing shows a panda with my initials at the bottom right corner, AY in blue.
+    I apologize if it doesn't appear to look like AY, but I definitely tried!
+  </p>
 
-    Red <input type="range" min="0" max="100" value="0" class="slider" id="redSlide">
-    <p>
-    Green <input type="range" min="0" max="100" value="0" class="slider" id="greenSlide">
-    <p>
-    Blue <input type="range" min="0" max="100" value="0" class="slider" id="blueSlide">
-    <p>
+  <hr>
 
-    Size <input type="range" min="5" max="40" value="5" class="slider" id="sizeSlide">
-    <p>
+  <h3>Choose Colors</h3>
+  <p>
+    <button id="green">Green</button>
+    <button id="red">Red</button>
+  </p>
+  <hr>
+  <h3>Drawing Mode</h3>
+  <p>
+    <button id="pointButton">Point</button>
+    <button id="triButton">Triangle</button>
+    <button id="circleButton">Circle</button>
+  </p>
+  <hr>
+  <h3>Bonus Drawing Mode</h3>
+  <p>
+    <button id="starButton">Star</button>
+    <button id="heartButton">Heart</button>
+  </p>
+  <hr>
+  <h3>Shape Color</h3>
+  <p>
+    Red <input type="range" min="0" max="100" value="0" id="redSlide">
+    Green <input type="range" min="0" max="100" value="0" id="greenSlide">
+    Blue <input type="range" min="0" max="100" value="0" id="blueSlide">
+  </p>
+  <p>
+    Size <input type="range" min="5" max="40" value="5" id="sizeSlide">
+    Segments <input type="range" min="3" max="100" value="10" id="segmentSlide">
+  </p>
+  <hr>
+  <p>
+    <button id="pandaButton">Draw Panda</button>
+  </p>
+  <p>
+    Reference Drawing:
+    <a href="https://docs.google.com/document/d/13UcbdJbqIGMy41qTusd3F0dVRAkAX_59h9-m9R_2cl0/edit?tab=t.0" target="_blank">
+      Click here to view my original drawing
+    </a>
+  </p>
+  <!-- Scripts -->
+  <script src="../lib/webgl-utils.js"></script>
+  <script src="../lib/webgl-debug.js"></script>
+  <script src="../lib/cuon-utils.js"></script>
+  <script src="Triangle.js"></script>
+  <script src="Point.js"></script>
+  <script src="Circle.js"></script>
+  <script src="Star.js"></script>
+  <script src="Heart.js"></script>
+  <script src="asgn1.js"></script>
 
-    Segments <input type="range" min="3" max="100" value="10" class="slider" id="segmentSlide">
-    <p>
-    <button type="button" id="pandaButton">Draw Panda</button>
-    <p>
-
-    <!-- Reference link to original drawing -->
-    <p>
-      Reference Drawing: 
-      <a href="https://docs.google.com/document/d/13UcbdJbqIGMy41qTusd3F0dVRAkAX_59h9-m9R_2cl0/edit?tab=t.0" target="_blank">
-        Click here to view my original drawing
-      </a>
-    </p>
-
-    <script src="../lib/webgl-utils.js"></script>
-    <script src="../lib/webgl-debug.js"></script>
-    <script src="../lib/cuon-utils.js"></script>
-    <script src="Triangle.js"></script>
-    <script src="Point.js"></script>
-    <script src="Circle.js"></script>
-    <script src="asgn1.js"></script>
-  </body>
+</body>
 </html>
