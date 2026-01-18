@@ -8,6 +8,11 @@ let a_Position, u_FragColor, u_ModelMatrix, u_GlobalRotation;
 
 // UI state
 let g_globalAngle = 0;
+// Mouse rotation (drag)
+let g_mouseRotX = 0;   // up/down drag -> rotate around X
+let g_mouseRotY = 0;   // left/right drag -> rotate around Y
+let g_isDragging = false;
+
 let g_leg1 = 0;
 let g_leg2 = 0;
 let g_animate = false;
@@ -40,6 +45,38 @@ void main() {
   gl_FragColor = u_FragColor;
 }
 `;
+function addMouseControls() {
+  // Convert mouse position to -1..+1 in canvas space
+  function getMouseNorm(ev) {
+    const rect = canvas.getBoundingClientRect();
+    const x = (ev.clientX - rect.left) / rect.width;   // 0..1
+    const y = (ev.clientY - rect.top) / rect.height;   // 0..1
+    const nx = (x - 0.5) * 2;                          // -1..1
+    const ny = (0.5 - y) * 2;                          // -1..1 (up positive)
+    return { nx, ny };
+  }
+
+  canvas.addEventListener('mousedown', (ev) => {
+    g_isDragging = true;
+    const { nx, ny } = getMouseNorm(ev);
+
+    // Simple mapping: position -> rotation
+    g_mouseRotY = nx * 180;   // left/right -> yaw
+    g_mouseRotX = ny * 180;   // up/down -> pitch
+  });
+
+  canvas.addEventListener('mousemove', (ev) => {
+    if (!g_isDragging) return;
+    const { nx, ny } = getMouseNorm(ev);
+
+    g_mouseRotY = nx * 180;
+    g_mouseRotX = ny * 180;
+  });
+
+  window.addEventListener('mouseup', () => {
+    g_isDragging = false;
+  });
+}
 
 // ==========================================================
 // MAIN
@@ -65,7 +102,7 @@ function main() {
   document.getElementById('leg1').oninput = e => !g_animate && (g_leg1 = +e.target.value);
   document.getElementById('leg2').oninput = e => !g_animate && (g_leg2 = +e.target.value);
   document.getElementById('animToggle').onclick = () => g_animate = !g_animate;
-
+  addMouseControls();
   requestAnimationFrame(tick);
 }
 
@@ -99,9 +136,17 @@ function updateAnimationAngles() {
 function renderScene() {
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-  const globalRot = new Matrix4();
+    const globalRot = new Matrix4();
+
+  // Mouse pitch then yaw
+  globalRot.rotate(g_mouseRotX, 1, 0, 0);
+  globalRot.rotate(g_mouseRotY, 0, 1, 0);
+
+  // Slider adds extra yaw (so both work)
   globalRot.rotate(g_globalAngle, 0, 1, 0);
+
   gl.uniformMatrix4fv(u_GlobalRotation, false, globalRot.elements);
+
 
   // const world = new Matrix4();
   // world.scale(0.85, 0.85, 0.85);
