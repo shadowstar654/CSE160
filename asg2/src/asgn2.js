@@ -103,9 +103,13 @@ function renderScene() {
   globalRot.rotate(g_globalAngle, 0, 1, 0);
   gl.uniformMatrix4fv(u_GlobalRotation, false, globalRot.elements);
 
+  // const world = new Matrix4();
+  // world.scale(0.85, 0.85, 0.85);
+  // world.translate(0, -0.05, 0);
   const world = new Matrix4();
-  world.scale(0.85, 0.85, 0.85);
-  world.translate(0, -0.05, 0);
+  world.scale(0.70, 0.70, 0.70);   // smaller turtle
+  world.translate(-0.10, -0.05, 0); // nudge left + keep same height
+
 
   drawTurtle(world);
 }
@@ -118,6 +122,12 @@ function renderCube(color, M) {
   c.color = color;
   c.matrix.set(M);
   c.render();
+}
+function renderSphere(color, M) {
+  const s = new Sphere();
+  s.color = color;
+  s.matrix.set(M);
+  s.render();
 }
 
 function renderCylinder(color, M) {
@@ -279,91 +289,83 @@ function drawClaws(footCoord, clawColor, toeForward) {
   }
 }
 function drawRealHead(world, bodyGreen) {
-  const eyeWhite = [1, 1, 1, 1];
-  const eyeBlack = [0.05, 0.05, 0.05, 1];
-  const blush    = [1.00, 0.60, 0.75, 1];
-  const mouthCol = [0.08, 0.08, 0.08, 1];
+  const eyeW = [1,1,1,1];
+  const eyeB = [0,0,0,1];
+  const blush = [1,0.6,0.75,1];
+  const mouth = [0.08,0.08,0.08,1];
 
-  // --------------------------------------------
-  // HEAD PLACEMENT (the big green block you want)
-  // Tune these 3 numbers ONLY if you want to slide head around.
-  // --------------------------------------------
-  const headX = 0;   // left/right
-  const headY = -0.14;   // up/down
-  const headZ =  0.78;   // forward/back (toward viewer in your side view)
+  // --- HEAD placement ---
+  const headX = 0.00;
+  const headY = -0.16;
+  const headZ = 1.05;     // forward, but safe now that turtle is scaled down
 
-  // Head size (cube scaled into a block)
-  const headSX = 0.62;
-  const headSY = 0.42;
-  const headSZ = 0.52;
+  // --- HEAD size ---
+  const headSX = 0.72;
+  const headSY = 0.48;
+  const headSZ = 0.60;
 
-  // --------------------------------------------
-  // NECK (cylinder) aimed forward (+Z)
-  // --------------------------------------------
+  // --- NECK settings ---
+  const neckX = 0.10;
+  const neckY = -0.20;     // lower so visible under rim
+  const neckStartZ = 0.46; // start near shell front
+  const neckRad = 0.20;
+
+  // compute neckLen so it ends exactly at head back face
+  const headBackZ = headZ - headSZ * 0.5;
+  const neckLen = headBackZ - neckStartZ;
+
+  // neck base block to hide seam
+  let M = new Matrix4(world);
+  M.translate(neckX, neckY - 0.06, neckStartZ - 0.08);
+  M.scale(0.36, 0.26, 0.36);
+  renderCube(bodyGreen, M);
+
+  // cylinder neck (Y axis -> Z axis)
   const neck = new Cylinder();
   neck.color = bodyGreen;
-
   neck.matrix.set(world);
-  neck.matrix.translate(headX + 0.18, headY - 0.05, headZ - 0.34); // start under shell lip -> into head
-  neck.matrix.rotate(90, 1, 0, 0);                                  // cylinder axis Y -> Z
-  neck.matrix.scale(0.18, 0.50, 0.18);                               // thickness + length
+  neck.matrix.translate(neckX, neckY, neckStartZ);
+  neck.matrix.rotate(90, 1, 0, 0);
+  neck.matrix.scale(neckRad, neckLen, neckRad);
   neck.render();
 
-  // --------------------------------------------
-  // HEAD BLOCK (this is the face plane)
-  // --------------------------------------------
+  // head block
   const headBase = new Matrix4(world);
   headBase.translate(headX, headY, headZ);
 
-  let M = new Matrix4(headBase);
-  M.scale(headSX, headSY, headSZ);
-  renderCube(bodyGreen, M);
+  // M = new Matrix4(headBase);
+  // M.scale(headSX, headSY, headSZ);
+  // renderCube(bodyGreen, M);
+  const headSphere = new Sphere();
+  headSphere.color = bodyGreen;
+  headSphere.sCount = 12;
+  headSphere.size = 5.7; // this is now sane
+  headSphere.matrix.set(headBase);
+  headSphere.matrix.scale(headSX, headSY, headSZ);
+  headSphere.render();
 
-  // --------------------------------------------
-  // FACE PLANE: front face of head cube
-  // Cube local z goes [0..1] after scale/translate, but our cube is centered-ish depending on Cube.js.
-  // Your Cube.js draws from -0.5..+0.5, so after scaling:
-  // front face is at +headSZ*0.5 in local.
-  // We'll place features slightly OUT past that to avoid embedding.
-  // --------------------------------------------
-  const FACE_Z = (headSZ * 0.5) + 0.03;   // "just in front of the face"
-
-  // Helpers: place small blocks in HEAD LOCAL space
-  function faceBlock(color, fx, fy, fz, sx, sy, sz) {
+  // helper for face features
+  function face(c, x, y, z, sx, sy, sz) {
     const T = new Matrix4(headBase);
-    // head cube is centered at (0,0,0) in its local, so we use offsets in that centered space
-    T.translate(fx, fy, fz);
+    T.translate(x, y, z);
     T.scale(sx, sy, sz);
-    renderCube(color, T);
+    renderCube(c, T);
   }
 
-  // --------------------------------------------
-  // EYES (front-facing)
-  // --------------------------------------------
-  // Left eye white
-  faceBlock(eyeWhite, -0.14,  0.10, FACE_Z, 0.11, 0.11, 0.05);
-  // Left pupil
-  faceBlock(eyeBlack, -0.12,  0.10, FACE_Z + 0.02, 0.05, 0.05, 0.04);
+  const faceZ = headSZ * 0.5 + 0.03;
 
-  // Right eye white
-  faceBlock(eyeWhite,  0.14,  0.10, FACE_Z, 0.11, 0.11, 0.05);
-  // Right pupil
-  faceBlock(eyeBlack,  0.16,  0.10, FACE_Z + 0.02, 0.05, 0.05, 0.04);
+  // eyes
+  face(eyeW, -0.16,  0.12, faceZ,        0.12, 0.12, 0.05);
+  face(eyeB, -0.14,  0.12, faceZ + 0.02, 0.05, 0.05, 0.04);
 
-  // --------------------------------------------
-  // BLUSH (front-facing)
-  // --------------------------------------------
-  faceBlock(blush, -0.22, -0.02, FACE_Z, 0.10, 0.07, 0.04);
-  faceBlock(blush,  0.22, -0.02, FACE_Z, 0.10, 0.07, 0.04);
+  face(eyeW,  0.18,  0.12, faceZ,        0.12, 0.12, 0.05);
+  face(eyeB,  0.18,  0.12, faceZ + 0.02, 0.05, 0.05, 0.04);
 
-  // --------------------------------------------
-  // MOUTH (front-facing)
-  // --------------------------------------------
-  faceBlock(mouthCol, 0.02, -0.10, FACE_Z + 0.01, 0.16, 0.03, 0.03);
+  // blush
+  face(blush, -0.24, -0.02, faceZ, 0.11, 0.08, 0.04);
+  face(blush,  0.24, -0.02, faceZ, 0.11, 0.08, 0.04);
 
-  // --------------------------------------------
-  // SNOUT / NOSE BUMP (optional but helps)
-  // --------------------------------------------
-  faceBlock(bodyGreen, 0.05, -0.06, FACE_Z + 0.05, 0.26, 0.18, 0.16);
+  // mouth
+  face(mouth, 0.02, -0.12, faceZ + 0.01, 0.18, 0.035, 0.03);
 }
 
