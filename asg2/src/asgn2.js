@@ -1,14 +1,3 @@
-// ==========================================================
-// asgn2.js — FULL WORKING FILE
-// Turtle with mouse rotation + shift-click poke + FPS HUD
-// Performance: reuses shapes + avoids per-frame allocations
-// NOTE: This expects:
-//  - Cube.js provides drawTriangle3D + Cube
-//  - Cylinder.js provides Cylinder
-//  - Sphere.js provides Sphere
-//  - HTML contains <div id="perf"></div> for FPS HUD
-// ==========================================================
-
 let canvas, gl;
 let a_Position, u_FragColor, u_ModelMatrix, u_GlobalRotation;
 
@@ -23,6 +12,9 @@ let g_isDragging = false;
 // Poke animation (shift-click)
 let g_pokeStart = -1;     // seconds timestamp; -1 means inactive
 let g_pokeT = 0;          // 0..1 normalized progress
+
+// Shift-click mode: cycle between 2 poke animations
+let g_pokeMode = 0;       // 0 = CRY, 1 = -V- smile + nostrils
 
 let g_leg1 = 0;
 let g_leg2 = 0;
@@ -82,6 +74,8 @@ function addMouseControls() {
   canvas.addEventListener('mousedown', (ev) => {
     // SHIFT+CLICK => poke animation (do NOT start dragging rotation)
     if (ev.shiftKey) {
+      // cycle poke mode each shift-click
+      g_pokeMode = (g_pokeMode + 1) % 2;  // 0=cry, 1=smile
       g_pokeStart = performance.now() / 1000;
       g_isDragging = false;
       return;
@@ -142,8 +136,12 @@ function main() {
   const leg2El = document.getElementById('leg2');
   if (leg2El) leg2El.oninput = e => !g_animate && (g_leg2 = +e.target.value);
 
-  const animEl = document.getElementById('animToggle');
-  if (animEl) animEl.onclick = () => g_animate = !g_animate;
+  // Two-button animation control
+  const animOnEl = document.getElementById('animOn');
+  if (animOnEl) animOnEl.onclick = () => { g_animate = true; };
+
+  const animOffEl = document.getElementById('animOff');
+  if (animOffEl) animOffEl.onclick = () => { g_animate = false; };
 
   addMouseControls();
   requestAnimationFrame(tick);
@@ -157,12 +155,11 @@ function tick() {
 
   // Perf smoothing (EMA)
   const fps = 1000.0 / Math.max(dtMS, 0.0001);
-  const alpha = 0.08; // smaller = smoother = less "flip"
+  const alpha = 0.08; // smaller = smoother
   g_fpsSMA = (g_fpsSMA === 0) ? fps : (g_fpsSMA * (1 - alpha) + fps * alpha);
   g_msSMA  = (g_msSMA  === 0) ? dtMS : (g_msSMA  * (1 - alpha) + dtMS * alpha);
 
-  // Only update HUD a few times per second to avoid jitter
-  // (and reduce DOM churn)
+  // Update HUD a few times per second to avoid jitter + DOM churn
   if (g_perfEl) {
     if (!tick._hudLast || nowMS - tick._hudLast > 250) {
       tick._hudLast = nowMS;
@@ -400,7 +397,9 @@ function drawClaws(footCoord, clawColor, toeForward) {
 }
 
 // ==========================================================
-// HEAD + POKE (CRY) ANIMATION
+// HEAD + POKE (2 MODES)
+//   mode 0: CRY (your original)
+//   mode 1: -V- goofy smile, straight-line eyes, nostrils
 // ==========================================================
 function drawRealHead(world, bodyGreen) {
   const eyeW  = [1, 1, 1, 1];
@@ -408,6 +407,7 @@ function drawRealHead(world, bodyGreen) {
   const blush = [1, 0.6, 0.75, 1];
   const mouth = [0.08, 0.08, 0.08, 1];
   const tearC = [0.25, 0.55, 1.0, 1];
+  const nostrilC = [0.05, 0.05, 0.05, 1];
 
   // head placement
   const headX = 0.00;
@@ -470,7 +470,7 @@ function drawRealHead(world, bodyGreen) {
   const poking = (g_pokeStart >= 0);
   const t = g_pokeT;
 
-  // ease
+  // ease (for small motion during poke)
   const ease = (t < 0.5) ? (2 * t * t) : (1 - Math.pow(-2 * t + 2, 2) / 2);
   const tearY = 0.05 - 0.40 * ease;
 
@@ -478,8 +478,17 @@ function drawRealHead(world, bodyGreen) {
   faceCube(blush, -0.24, -0.02, faceZ, 0.11, 0.08, 0.04);
   faceCube(blush,  0.24, -0.02, faceZ, 0.11, 0.08, 0.04);
 
+  // add nostrils ONLY during the goofy smile poke, or always if you want
+  function drawNostrils() {
+    // two little dots under eyes
+    faceCube(nostrilC, -0.05, 0.02, faceZ + 0.01, 0.035, 0.035, 0.02);
+    faceCube(nostrilC,  0.05, 0.02, faceZ + 0.01, 0.035, 0.035, 0.02);
+  }
+
   if (!poking) {
-    // normal eyes
+    // -------------------------
+    // NORMAL FACE
+    // -------------------------
     faceCube(eyeW, -0.16,  0.12, faceZ,        0.12, 0.12, 0.05);
     faceCube(eyeB, -0.14,  0.12, faceZ + 0.02, 0.05, 0.05, 0.04);
 
@@ -487,39 +496,88 @@ function drawRealHead(world, bodyGreen) {
     faceCube(eyeB,  0.18,  0.12, faceZ + 0.02, 0.05, 0.05, 0.04);
 
     faceCube(mouth, 0.02, -0.12, faceZ + 0.01, 0.18, 0.035, 0.03);
+
   } else {
-    // cry eyes: > <
-    let L = new Matrix4(headBase);
-    L.translate(-0.17, 0.12, faceZ + 0.02);
-    L.rotate(30, 0, 0, 1);
-    L.scale(0.16, 0.03, 0.04);
-    renderCube(eyeB, L);
+    // -------------------------
+    // POKE FACE (2 MODES)
+    // -------------------------
+    if (g_pokeMode === 0) {
+      // ======================================================
+      // MODE 0: CRY (your original)
+      // ======================================================
 
-    L = new Matrix4(headBase);
-    L.translate(-0.17, 0.08, faceZ + 0.02);
-    L.rotate(-30, 0, 0, 1);
-    L.scale(0.16, 0.03, 0.04);
-    renderCube(eyeB, L);
+      // cry eyes: > <
+      let L = new Matrix4(headBase);
+      L.translate(-0.17, 0.12, faceZ + 0.02);
+      L.rotate(30, 0, 0, 1);
+      L.scale(0.16, 0.03, 0.04);
+      renderCube(eyeB, L);
 
-    let R = new Matrix4(headBase);
-    R.translate(0.19, 0.12, faceZ + 0.02);
-    R.rotate(-30, 0, 0, 1);
-    R.scale(0.16, 0.03, 0.04);
-    renderCube(eyeB, R);
+      L = new Matrix4(headBase);
+      L.translate(-0.17, 0.08, faceZ + 0.02);
+      L.rotate(-30, 0, 0, 1);
+      L.scale(0.16, 0.03, 0.04);
+      renderCube(eyeB, L);
 
-    R = new Matrix4(headBase);
-    R.translate(0.19, 0.08, faceZ + 0.02);
-    R.rotate(30, 0, 0, 1);
-    R.scale(0.16, 0.03, 0.04);
-    renderCube(eyeB, R);
+      let R = new Matrix4(headBase);
+      R.translate(0.19, 0.12, faceZ + 0.02);
+      R.rotate(-30, 0, 0, 1);
+      R.scale(0.16, 0.03, 0.04);
+      renderCube(eyeB, R);
 
-    // cry mouth
-    faceCube(mouth, 0.02, -0.14, faceZ + 0.02, 0.20, 0.04, 0.03);
-    faceCube(mouth, -0.10, -0.16, faceZ + 0.02, 0.06, 0.06, 0.03);
-    faceCube(mouth,  0.14, -0.16, faceZ + 0.02, 0.06, 0.06, 0.03);
+      R = new Matrix4(headBase);
+      R.translate(0.19, 0.08, faceZ + 0.02);
+      R.rotate(30, 0, 0, 1);
+      R.scale(0.16, 0.03, 0.04);
+      renderCube(eyeB, R);
 
-    // falling tears (cheap detail)
-    faceSphere(tearC, -0.20, tearY, faceZ + 0.10, 0.10, 0.14, 0.10, 2.4, 6);
-    faceSphere(tearC,  0.20, tearY, faceZ + 0.10, 0.10, 0.14, 0.10, 2.4, 6);
+      // cry mouth
+      faceCube(mouth, 0.02, -0.14, faceZ + 0.02, 0.20, 0.04, 0.03);
+      faceCube(mouth, -0.10, -0.16, faceZ + 0.02, 0.06, 0.06, 0.03);
+      faceCube(mouth,  0.14, -0.16, faceZ + 0.02, 0.06, 0.06, 0.03);
+
+      // falling tears (cheap detail)
+      faceSphere(tearC, -0.20, tearY, faceZ + 0.10, 0.10, 0.14, 0.10, 2.4, 6);
+      faceSphere(tearC,  0.20, tearY, faceZ + 0.10, 0.10, 0.14, 0.10, 2.4, 6);
+
+    } else {
+      // ======================================================
+      // MODE 1: -V- goofy smile + straight-line eyes + nostrils
+      // ======================================================
+
+      // straight-line eyes: like "_" but slightly tilted is optional
+      // Left eye line
+      faceCube(eyeB, -0.15, 0.12, faceZ + 0.02, 0.16, 0.03, 0.04);
+      // Right eye line
+      faceCube(eyeB,  0.17, 0.12, faceZ + 0.02, 0.16, 0.03, 0.04);
+
+      // Nostrils (goofy)
+      drawNostrils();
+
+     const open = 0.01 + 0.03 * ease;
+
+     const vx = 0.02;
+     const vy = -0.12;
+     const vz = faceZ + 0.03;
+
+     const inward = 0.045;   // smaller = closer together
+     const down   = -0.02;
+
+      // LEFT arm
+     let V1 = new Matrix4(headBase);
+     V1.translate(vx, vy - open, vz);
+     V1.rotate(35, 0, 0, 1);
+     V1.translate(inward, down, 0);
+     V1.scale(0.12, 0.035, 0.03);
+     renderCube(mouth, V1);
+
+      // RIGHT arm
+     let V2 = new Matrix4(headBase);
+     V2.translate(vx, vy - open, vz);
+     V2.rotate(-35, 0, 0, 1);
+     V2.translate(-inward, down, 0);
+     V2.scale(0.12, 0.035, 0.03);
+     renderCube(mouth, V2);
+    }
   }
 }

@@ -1,14 +1,8 @@
-// =========================
-// Cylinder.js
-// Requires drawTriangle3D() from Cube.js
-// Local cylinder runs along +Y from y=0..1, radius 0.5
-// =========================
-
 class Cylinder {
   constructor() {
     this.color = [1, 1, 1, 1];
     this.matrix = new Matrix4();
-    this.segments = 14; // slightly lower for speed; still looks fine
+    this.segments = 14;
   }
 
   render() {

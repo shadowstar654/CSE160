@@ -8,7 +8,6 @@
 <body onload="main()">
   <p><strong>Student Name:</strong> Angela Yu</p>
 
-  <!-- Performance HUD -->
   <div id="perf"
        style="position:fixed; top:10px; right:10px; background:#0008; color:#fff;
               padding:8px 10px; font:12px monospace; border-radius:8px; z-index:9999;">
@@ -33,16 +32,14 @@
   </p>
 
   <p>
-    <button id="animToggle">Toggle Animation</button>
+    <button id="animOn">Start Animation</button>
+    <button id="animOff">Stop Animation</button>
   </p>
 
-  <!-- Libraries (HTML is in src/, lib/ is one level up) -->
   <script src="../lib/webgl-utils.js"></script>
   <script src="../lib/webgl-debug.js"></script>
   <script src="../lib/cuon-utils.js"></script>
   <script src="../lib/cuon-matrix-cse160.js"></script>
-
-  <!-- Your code -->
   <script src="Cube.js"></script>
   <script src="Cylinder.js"></script>
   <script src="Sphere.js"></script>

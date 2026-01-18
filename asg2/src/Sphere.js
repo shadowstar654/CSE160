@@ -1,11 +1,3 @@
-// =========================
-// Sphere.js (optimized)
-// Requires drawTriangle3D() from Cube.js
-// Local unit sphere centered at origin, radius = 0.5
-// - this.center moves the sphere
-// - this.size scales the sphere (size=5 => ~1.0 scale)
-// - this.sCount controls detail
-// =========================
 
 class Sphere {
   constructor() {
