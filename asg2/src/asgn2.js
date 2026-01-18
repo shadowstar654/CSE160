@@ -12,6 +12,9 @@ let g_globalAngle = 0;
 let g_mouseRotX = 0;   // up/down drag -> rotate around X
 let g_mouseRotY = 0;   // left/right drag -> rotate around Y
 let g_isDragging = false;
+// Poke animation (shift-click)
+let g_pokeStart = -1;     // seconds timestamp; -1 means inactive
+let g_pokeT = 0;          // 0..1 normalized progress
 
 let g_leg1 = 0;
 let g_leg2 = 0;
@@ -56,7 +59,22 @@ function addMouseControls() {
     return { nx, ny };
   }
 
-  canvas.addEventListener('mousedown', (ev) => {
+  // canvas.addEventListener('mousedown', (ev) => {
+  //   g_isDragging = true;
+  //   const { nx, ny } = getMouseNorm(ev);
+
+  //   // Simple mapping: position -> rotation
+  //   g_mouseRotY = nx * 180;   // left/right -> yaw
+  //   g_mouseRotX = ny * 180;   // up/down -> pitch
+  // });
+    canvas.addEventListener('mousedown', (ev) => {
+    // SHIFT+CLICK => poke animation (do NOT start dragging rotation)
+    if (ev.shiftKey) {
+      g_pokeStart = performance.now() / 1000; // start poke
+      g_isDragging = false;
+      return;
+    }
+
     g_isDragging = true;
     const { nx, ny } = getMouseNorm(ev);
 
@@ -64,6 +82,7 @@ function addMouseControls() {
     g_mouseRotY = nx * 180;   // left/right -> yaw
     g_mouseRotX = ny * 180;   // up/down -> pitch
   });
+
 
   canvas.addEventListener('mousemove', (ev) => {
     if (!g_isDragging) return;
@@ -107,8 +126,27 @@ function main() {
 }
 
 // ==========================================================
+// function tick() {
+//   g_seconds = performance.now() / 1000 - g_startTime;
+//   if (g_animate) updateAnimationAngles();
+//   renderScene();
+//   requestAnimationFrame(tick);
+// }
 function tick() {
   g_seconds = performance.now() / 1000 - g_startTime;
+
+  // Update poke animation progress (lasts 1.2 seconds)
+  if (g_pokeStart >= 0) {
+    const t = (performance.now() / 1000 - g_pokeStart) / 1.2;
+    g_pokeT = Math.min(Math.max(t, 0), 1);
+    if (t >= 1) {
+      g_pokeStart = -1; // done
+      g_pokeT = 0;
+    }
+  } else {
+    g_pokeT = 0;
+  }
+
   if (g_animate) updateAnimationAngles();
   renderScene();
   requestAnimationFrame(tick);
@@ -333,16 +371,97 @@ function drawClaws(footCoord, clawColor, toeForward) {
     renderCube(clawColor, M);
   }
 }
+// function drawRealHead(world, bodyGreen) {
+//   const eyeW = [1,1,1,1];
+//   const eyeB = [0,0,0,1];
+//   const blush = [1,0.6,0.75,1];
+//   const mouth = [0.08,0.08,0.08,1];
+
+//   // --- HEAD placement ---
+//   const headX = 0.00;
+//   const headY = -0.16;
+//   const headZ = 1.05;     // forward, but safe now that turtle is scaled down
+
+//   // --- HEAD size ---
+//   const headSX = 0.72;
+//   const headSY = 0.48;
+//   const headSZ = 0.60;
+
+//   // --- NECK settings ---
+//   const neckX = 0.10;
+//   const neckY = -0.20;     // lower so visible under rim
+//   const neckStartZ = 0.46; // start near shell front
+//   const neckRad = 0.20;
+
+//   // compute neckLen so it ends exactly at head back face
+//   const headBackZ = headZ - headSZ * 0.5;
+//   const neckLen = headBackZ - neckStartZ;
+
+//   // neck base block to hide seam
+//   let M = new Matrix4(world);
+//   M.translate(neckX, neckY - 0.06, neckStartZ - 0.08);
+//   M.scale(0.36, 0.26, 0.36);
+//   renderCube(bodyGreen, M);
+
+//   // cylinder neck (Y axis -> Z axis)
+//   const neck = new Cylinder();
+//   neck.color = bodyGreen;
+//   neck.matrix.set(world);
+//   neck.matrix.translate(neckX, neckY, neckStartZ);
+//   neck.matrix.rotate(90, 1, 0, 0);
+//   neck.matrix.scale(neckRad, neckLen, neckRad);
+//   neck.render();
+
+//   // head block
+//   const headBase = new Matrix4(world);
+//   headBase.translate(headX, headY, headZ);
+
+//   // M = new Matrix4(headBase);
+//   // M.scale(headSX, headSY, headSZ);
+//   // renderCube(bodyGreen, M);
+//   const headSphere = new Sphere();
+//   headSphere.color = bodyGreen;
+//   headSphere.sCount = 12;
+//   headSphere.size = 5.7; // this is now sane
+//   headSphere.matrix.set(headBase);
+//   headSphere.matrix.scale(headSX, headSY, headSZ);
+//   headSphere.render();
+
+//   // helper for face features
+//   function face(c, x, y, z, sx, sy, sz) {
+//     const T = new Matrix4(headBase);
+//     T.translate(x, y, z);
+//     T.scale(sx, sy, sz);
+//     renderCube(c, T);
+//   }
+
+//   const faceZ = headSZ * 0.5 + 0.03;
+
+//   // eyes
+//   face(eyeW, -0.16,  0.12, faceZ,        0.12, 0.12, 0.05);
+//   face(eyeB, -0.14,  0.12, faceZ + 0.02, 0.05, 0.05, 0.04);
+
+//   face(eyeW,  0.18,  0.12, faceZ,        0.12, 0.12, 0.05);
+//   face(eyeB,  0.18,  0.12, faceZ + 0.02, 0.05, 0.05, 0.04);
+
+//   // blush
+//   face(blush, -0.24, -0.02, faceZ, 0.11, 0.08, 0.04);
+//   face(blush,  0.24, -0.02, faceZ, 0.11, 0.08, 0.04);
+
+//   // mouth
+//   face(mouth, 0.02, -0.12, faceZ + 0.01, 0.18, 0.035, 0.03);
+// }
 function drawRealHead(world, bodyGreen) {
-  const eyeW = [1,1,1,1];
-  const eyeB = [0,0,0,1];
+  const eyeW  = [1,1,1,1];
+  const eyeB  = [0,0,0,1];
   const blush = [1,0.6,0.75,1];
   const mouth = [0.08,0.08,0.08,1];
+  const tearC = [0.25,0.55,1.0,1];  // blue tears
 
   // --- HEAD placement ---
   const headX = 0.00;
   const headY = -0.16;
-  const headZ = 1.05;     // forward, but safe now that turtle is scaled down
+  const headZ = 1.05;
 
   // --- HEAD size ---
   const headSX = 0.72;
@@ -351,8 +470,8 @@ function drawRealHead(world, bodyGreen) {
 
   // --- NECK settings ---
   const neckX = 0.10;
-  const neckY = -0.20;     // lower so visible under rim
-  const neckStartZ = 0.46; // start near shell front
+  const neckY = -0.20;
+  const neckStartZ = 0.46;
   const neckRad = 0.20;
 
   // compute neckLen so it ends exactly at head back face
@@ -374,43 +493,109 @@ function drawRealHead(world, bodyGreen) {
   neck.matrix.scale(neckRad, neckLen, neckRad);
   neck.render();
 
-  // head block
+  // head sphere
   const headBase = new Matrix4(world);
   headBase.translate(headX, headY, headZ);
 
-  // M = new Matrix4(headBase);
-  // M.scale(headSX, headSY, headSZ);
-  // renderCube(bodyGreen, M);
   const headSphere = new Sphere();
   headSphere.color = bodyGreen;
   headSphere.sCount = 12;
-  headSphere.size = 5.7; // this is now sane
+  headSphere.size = 5.7;
   headSphere.matrix.set(headBase);
   headSphere.matrix.scale(headSX, headSY, headSZ);
   headSphere.render();
 
-  // helper for face features
-  function face(c, x, y, z, sx, sy, sz) {
+  // helper: face features anchored to headBase
+  function faceCube(c, x, y, z, sx, sy, sz) {
     const T = new Matrix4(headBase);
     T.translate(x, y, z);
     T.scale(sx, sy, sz);
     renderCube(c, T);
   }
+  function faceSphere(c, x, y, z, sx, sy, sz, size=2.4, detail=10) {
+    const T = new Matrix4(headBase);
+    T.translate(x, y, z);
+    const s = new Sphere();
+    s.color = c;
+    s.sCount = detail;
+    s.size = size;
+    s.matrix.set(T);
+    s.matrix.scale(sx, sy, sz);
+    s.render();
+  }
 
-  const faceZ = headSZ * 0.5 + 0.03;
+  // Face plane Z for cube features pushed in front of sphere
+  const faceZ = headSZ * 0.5 + 0.06;
 
-  // eyes
-  face(eyeW, -0.16,  0.12, faceZ,        0.12, 0.12, 0.05);
-  face(eyeB, -0.14,  0.12, faceZ + 0.02, 0.05, 0.05, 0.04);
+  // ----------------------------
+  // POKE ANIM CONTROL (0..1)
+  // ----------------------------
+  const poking = (g_pokeStart >= 0);
+  const t = g_pokeT; // 0..1
 
-  face(eyeW,  0.18,  0.12, faceZ,        0.12, 0.12, 0.05);
-  face(eyeB,  0.18,  0.12, faceZ + 0.02, 0.05, 0.05, 0.04);
+  // Make a nice "ease" curve for the poke (fast in, slow out)
+  const ease = (t < 0.5) ? (2*t*t) : (1 - Math.pow(-2*t+2, 2)/2);
 
-  // blush
-  face(blush, -0.24, -0.02, faceZ, 0.11, 0.08, 0.04);
-  face(blush,  0.24, -0.02, faceZ, 0.11, 0.08, 0.04);
+  // Tears fall down during the poke
+  // start at y=0.05, fall to y=-0.35
+  const tearY = 0.05 - 0.40 * ease;
 
-  // mouth
-  face(mouth, 0.02, -0.12, faceZ + 0.01, 0.18, 0.035, 0.03);
+  // ----------------------------
+  // BLUSH (always)
+  // ----------------------------
+  faceCube(blush, -0.24, -0.02, faceZ, 0.11, 0.08, 0.04);
+  faceCube(blush,  0.24, -0.02, faceZ, 0.11, 0.08, 0.04);
+
+  // ----------------------------
+  // NORMAL eyes vs CRY eyes
+  // ----------------------------
+  if (!poking) {
+    // Normal eyes (your original)
+    faceCube(eyeW, -0.16,  0.12, faceZ,        0.12, 0.12, 0.05);
+    faceCube(eyeB, -0.14,  0.12, faceZ + 0.02, 0.05, 0.05, 0.04);
+
+    faceCube(eyeW,  0.18,  0.12, faceZ,        0.12, 0.12, 0.05);
+    faceCube(eyeB,  0.18,  0.12, faceZ + 0.02, 0.05, 0.05, 0.04);
+
+    // Small neutral mouth
+    faceCube(mouth, 0.02, -0.12, faceZ + 0.01, 0.18, 0.035, 0.03);
+  } else {
+    // CRY eyes: draw "> <" using 2 slanted bars per eye
+    // Left eye ">"
+    let L = new Matrix4(headBase);
+    L.translate(-0.17, 0.12, faceZ + 0.02);
+    L.rotate(30, 0, 0, 1);
+    L.scale(0.16, 0.03, 0.04);
+    renderCube(eyeB, L);
+
+    L = new Matrix4(headBase);
+    L.translate(-0.17, 0.08, faceZ + 0.02);
+    L.rotate(-30, 0, 0, 1);
+    L.scale(0.16, 0.03, 0.04);
+    renderCube(eyeB, L);
+
+    // Right eye "<"
+    let R = new Matrix4(headBase);
+    R.translate(0.19, 0.12, faceZ + 0.02);
+    R.rotate(-30, 0, 0, 1);
+    R.scale(0.16, 0.03, 0.04);
+    renderCube(eyeB, R);
+
+    R = new Matrix4(headBase);
+    R.translate(0.19, 0.08, faceZ + 0.02);
+    R.rotate(30, 0, 0, 1);
+    R.scale(0.16, 0.03, 0.04);
+    renderCube(eyeB, R);
+
+    // Cry mouth (frown)
+    // a thicker center piece + two "corner" drops
+    faceCube(mouth, 0.02, -0.14, faceZ + 0.02, 0.20, 0.04, 0.03);
+    faceCube(mouth, -0.10, -0.16, faceZ + 0.02, 0.06, 0.06, 0.03);
+    faceCube(mouth,  0.14, -0.16, faceZ + 0.02, 0.06, 0.06, 0.03);
+
+    // TEARS: two blue spheres that fall
+    faceSphere(tearC, -0.20, tearY, faceZ + 0.10, 0.10, 0.14, 0.10, 2.6, 10);
+    faceSphere(tearC,  0.20, tearY, faceZ + 0.10, 0.10, 0.14, 0.10, 2.6, 10);
+  }
 }
 
