@@ -8,7 +8,7 @@ class Cylinder {
   constructor() {
     this.color = [1, 1, 1, 1];
     this.matrix = new Matrix4();
-    this.segments = 18;
+    this.segments = 14; // slightly lower for speed; still looks fine
   }
 
   render() {

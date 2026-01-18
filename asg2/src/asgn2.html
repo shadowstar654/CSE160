@@ -8,11 +8,17 @@
 <body onload="main()">
   <p><strong>Student Name:</strong> Angela Yu</p>
 
+  <!-- Performance HUD -->
+  <div id="perf"
+       style="position:fixed; top:10px; right:10px; background:#0008; color:#fff;
+              padding:8px 10px; font:12px monospace; border-radius:8px; z-index:9999;">
+    FPS: --<br>ms: --
+  </div>
+
   <canvas id="webgl" width="600" height="600" style="border:1px solid #000"></canvas>
 
   <p>
     Global Rotation
-    <!-- Start facing the other side (face-first) -->
     <input type="range" id="globalRot" min="0" max="360" value="0">
   </p>
 
