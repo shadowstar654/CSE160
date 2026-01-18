@@ -12,9 +12,7 @@ let g_isDragging = false;
 // Poke animation (shift-click)
 let g_pokeStart = -1;     // seconds timestamp; -1 means inactive
 let g_pokeT = 0;          // 0..1 normalized progress
-
-// Shift-click mode: cycle between 2 poke animations
-let g_pokeMode = 0;       // 0 = CRY, 1 = -V- smile + nostrils
+let g_pokeMode = 0;       // 0 = CRY, 1 = goofy -V- smile + nostrils
 
 let g_leg1 = 0;
 let g_leg2 = 0;
@@ -39,6 +37,7 @@ let g_msSMA = 0;
 let g_cube = null;
 let g_cyl  = null;
 let g_sph  = null;
+let g_hemi = null;
 
 // ==========================================================
 // SHADERS
@@ -74,7 +73,6 @@ function addMouseControls() {
   canvas.addEventListener('mousedown', (ev) => {
     // SHIFT+CLICK => poke animation (do NOT start dragging rotation)
     if (ev.shiftKey) {
-      // cycle poke mode each shift-click
       g_pokeMode = (g_pokeMode + 1) % 2;  // 0=cry, 1=smile
       g_pokeStart = performance.now() / 1000;
       g_isDragging = false;
@@ -125,6 +123,7 @@ function main() {
   g_cube = new Cube();
   g_cyl  = new Cylinder();
   g_sph  = new Sphere();
+  g_hemi = new Hemisphere();
 
   // UI
   const rotEl = document.getElementById('globalRot');
@@ -136,7 +135,6 @@ function main() {
   const leg2El = document.getElementById('leg2');
   if (leg2El) leg2El.oninput = e => !g_animate && (g_leg2 = +e.target.value);
 
-  // Two-button animation control
   const animOnEl = document.getElementById('animOn');
   if (animOnEl) animOnEl.onclick = () => { g_animate = true; };
 
@@ -209,12 +207,8 @@ function renderScene() {
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
   const globalRot = new Matrix4();
-
-  // Mouse pitch then yaw
   globalRot.rotate(g_mouseRotX, 1, 0, 0);
   globalRot.rotate(g_mouseRotY, 0, 1, 0);
-
-  // Slider adds extra yaw
   globalRot.rotate(g_globalAngle, 0, 1, 0);
 
   gl.uniformMatrix4fv(u_GlobalRotation, false, globalRot.elements);
@@ -235,11 +229,13 @@ function renderCube(color, M) {
   g_cube.render();
 }
 
-function renderCylinder(color, M) {
+function renderCylinder(color, M, segments = null) {
+  if (segments !== null) g_cyl.segments = segments;
   g_cyl.color = color;
   g_cyl.matrix.set(M);
   g_cyl.render();
 }
+
 
 function renderSphere(color, M, sCount = 10, size = 5.7) {
   g_sph.color = color;
@@ -247,6 +243,15 @@ function renderSphere(color, M, sCount = 10, size = 5.7) {
   g_sph.size = size;
   g_sph.matrix.set(M);
   g_sph.render();
+}
+
+function renderHemisphere(color, M, latBands = 12, lonBands = 30, size = 22.0) {
+  g_hemi.color = color;
+  g_hemi.latBands = latBands;
+  g_hemi.lonBands = lonBands;
+  g_hemi.size = size;
+  g_hemi.matrix.set(M);
+  g_hemi.render();
 }
 
 // ==========================================================
@@ -267,29 +272,40 @@ function drawTurtle(world) {
   M.scale(1.10, 0.18, 1.15);
   renderCube(bodyDark, M);
 
-  // shell layers
-  M = new Matrix4(world);
-  M.translate(0.08, -0.04, 0);
-  M.scale(1.35, 0.06, 1.50);
-  renderCube(rimLight, M);
+  // ======================================================
+  // NICE ROUND SHELL (NO GAP)
+  // Layer order:
+  // 1) rim band (light)
+  // 2) skirt (dark) that touches the dome
+  // 3) main dome hemisphere (dark/gold)
+  // 4) top highlight hemisphere (mid)
+  // ======================================================
 
   M = new Matrix4(world);
-  M.translate(0.08, 0.08, 0);
-  M.scale(1.30, 0.28, 1.45);
-  renderCube(shellDark, M);
+  M.translate(0.08, 0.02, 0.00);       // desired CENTER height of the band
+  M.scale(1.70, 0.10, 1.85);           // x/z radius, y height
+  M.translate(0, -0.5, 0);             // center cylinder (0..1) around y=0
+  renderCylinder(rimLight, M, 40);
 
+  // (B) skirt (dark) — taller, meets dome
   M = new Matrix4(world);
-  M.translate(0.08, 0.30, 0);
-  M.scale(1.05, 0.22, 1.20);
-  renderCube(shellMid, M);
+  M.translate(0.08, 0.10, 0.00);       // desired CENTER height of the skirt
+  M.scale(1.62, 0.26, 1.75);
+  M.translate(0, -0.5, 0);
+  renderCylinder(shellDark, M, 40);
 
-  // extra shell cap (4th layer)
-  const shellCap = [0.62, 0.48, 0.26, 1];
-  M = new Matrix4(world);
-  M.translate(0.08, 0.46, 0);
-  M.scale(0.78, 0.16, 0.90);
-  renderCube(shellCap, M);
+  // (C) main dome hemisphere (sits on skirt)
+  const domeC = [0.62, 0.48, 0.26, 1];
+  const domeM = new Matrix4(world);
+  domeM.translate(0.08, 0.18, 0.00);
+  domeM.scale(1.55, 1.10, 1.65);
+  renderHemisphere(domeC, domeM, 12, 30, 21.50);
 
+  // (D) top highlight hemisphere
+  const topM = new Matrix4(world);
+  topM.translate(0.08, 0.34, 0.00);
+  topM.scale(1.10, 0.80, 1.18);
+  renderHemisphere(shellMid, topM, 12, 30, 19.0);
   // head + neck
   drawRealHead(world, bodyGreen);
 
@@ -398,7 +414,7 @@ function drawClaws(footCoord, clawColor, toeForward) {
 
 // ==========================================================
 // HEAD + POKE (2 MODES)
-//   mode 0: CRY (your original)
+//   mode 0: CRY
 //   mode 1: -V- goofy smile, straight-line eyes, nostrils
 // ==========================================================
 function drawRealHead(world, bodyGreen) {
@@ -427,7 +443,7 @@ function drawRealHead(world, bodyGreen) {
 
   const headBackZ = headZ - headSZ * 0.5;
   let neckLen = headBackZ - neckStartZ;
-  if (neckLen < 0.05) neckLen = 0.05; // safety clamp
+  if (neckLen < 0.05) neckLen = 0.05;
 
   // neck base block
   let M = new Matrix4(world);
@@ -448,9 +464,8 @@ function drawRealHead(world, bodyGreen) {
 
   M = new Matrix4(headBase);
   M.scale(headSX, headSY, headSZ);
-  renderSphere(bodyGreen, M, 10, 5.7); // head detail 10 for speed
+  renderSphere(bodyGreen, M, 10, 5.7);
 
-  // helpers
   function faceCube(c, x, y, z, sx, sy, sz) {
     const T = new Matrix4(headBase);
     T.translate(x, y, z);
@@ -470,7 +485,6 @@ function drawRealHead(world, bodyGreen) {
   const poking = (g_pokeStart >= 0);
   const t = g_pokeT;
 
-  // ease (for small motion during poke)
   const ease = (t < 0.5) ? (2 * t * t) : (1 - Math.pow(-2 * t + 2, 2) / 2);
   const tearY = 0.05 - 0.40 * ease;
 
@@ -478,17 +492,13 @@ function drawRealHead(world, bodyGreen) {
   faceCube(blush, -0.24, -0.02, faceZ, 0.11, 0.08, 0.04);
   faceCube(blush,  0.24, -0.02, faceZ, 0.11, 0.08, 0.04);
 
-  // add nostrils ONLY during the goofy smile poke, or always if you want
   function drawNostrils() {
-    // two little dots under eyes
     faceCube(nostrilC, -0.05, 0.02, faceZ + 0.01, 0.035, 0.035, 0.02);
     faceCube(nostrilC,  0.05, 0.02, faceZ + 0.01, 0.035, 0.035, 0.02);
   }
 
   if (!poking) {
-    // -------------------------
     // NORMAL FACE
-    // -------------------------
     faceCube(eyeW, -0.16,  0.12, faceZ,        0.12, 0.12, 0.05);
     faceCube(eyeB, -0.14,  0.12, faceZ + 0.02, 0.05, 0.05, 0.04);
 
@@ -496,88 +506,73 @@ function drawRealHead(world, bodyGreen) {
     faceCube(eyeB,  0.18,  0.12, faceZ + 0.02, 0.05, 0.05, 0.04);
 
     faceCube(mouth, 0.02, -0.12, faceZ + 0.01, 0.18, 0.035, 0.03);
+    return;
+  }
+
+  // POKE FACE (2 MODES)
+  if (g_pokeMode === 0) {
+    // MODE 0: CRY
+    let L = new Matrix4(headBase);
+    L.translate(-0.17, 0.12, faceZ + 0.02);
+    L.rotate(30, 0, 0, 1);
+    L.scale(0.16, 0.03, 0.04);
+    renderCube(eyeB, L);
+
+    L = new Matrix4(headBase);
+    L.translate(-0.17, 0.08, faceZ + 0.02);
+    L.rotate(-30, 0, 0, 1);
+    L.scale(0.16, 0.03, 0.04);
+    renderCube(eyeB, L);
+
+    let R = new Matrix4(headBase);
+    R.translate(0.19, 0.12, faceZ + 0.02);
+    R.rotate(-30, 0, 0, 1);
+    R.scale(0.16, 0.03, 0.04);
+    renderCube(eyeB, R);
+
+    R = new Matrix4(headBase);
+    R.translate(0.19, 0.08, faceZ + 0.02);
+    R.rotate(30, 0, 0, 1);
+    R.scale(0.16, 0.03, 0.04);
+    renderCube(eyeB, R);
+
+    // cry mouth
+    faceCube(mouth, 0.02, -0.14, faceZ + 0.02, 0.20, 0.04, 0.03);
+    faceCube(mouth, -0.10, -0.16, faceZ + 0.02, 0.06, 0.06, 0.03);
+    faceCube(mouth,  0.14, -0.16, faceZ + 0.02, 0.06, 0.06, 0.03);
+
+    // falling tears
+    faceSphere(tearC, -0.20, tearY, faceZ + 0.10, 0.10, 0.14, 0.10, 2.4, 6);
+    faceSphere(tearC,  0.20, tearY, faceZ + 0.10, 0.10, 0.14, 0.10, 2.4, 6);
 
   } else {
-    // -------------------------
-    // POKE FACE (2 MODES)
-    // -------------------------
-    if (g_pokeMode === 0) {
-      // ======================================================
-      // MODE 0: CRY (your original)
-      // ======================================================
+    // MODE 1: goofy smile
+    faceCube(eyeB, -0.15, 0.12, faceZ + 0.02, 0.16, 0.03, 0.04);
+    faceCube(eyeB,  0.17, 0.12, faceZ + 0.02, 0.16, 0.03, 0.04);
 
-      // cry eyes: > <
-      let L = new Matrix4(headBase);
-      L.translate(-0.17, 0.12, faceZ + 0.02);
-      L.rotate(30, 0, 0, 1);
-      L.scale(0.16, 0.03, 0.04);
-      renderCube(eyeB, L);
+    drawNostrils();
 
-      L = new Matrix4(headBase);
-      L.translate(-0.17, 0.08, faceZ + 0.02);
-      L.rotate(-30, 0, 0, 1);
-      L.scale(0.16, 0.03, 0.04);
-      renderCube(eyeB, L);
+    const open = 0.01 + 0.03 * ease;
 
-      let R = new Matrix4(headBase);
-      R.translate(0.19, 0.12, faceZ + 0.02);
-      R.rotate(-30, 0, 0, 1);
-      R.scale(0.16, 0.03, 0.04);
-      renderCube(eyeB, R);
+    const vx = 0.02;
+    const vy = -0.12;
+    const vz = faceZ + 0.03;
 
-      R = new Matrix4(headBase);
-      R.translate(0.19, 0.08, faceZ + 0.02);
-      R.rotate(30, 0, 0, 1);
-      R.scale(0.16, 0.03, 0.04);
-      renderCube(eyeB, R);
+    const inward = 0.052;
+    const down   = -0.02;
 
-      // cry mouth
-      faceCube(mouth, 0.02, -0.14, faceZ + 0.02, 0.20, 0.04, 0.03);
-      faceCube(mouth, -0.10, -0.16, faceZ + 0.02, 0.06, 0.06, 0.03);
-      faceCube(mouth,  0.14, -0.16, faceZ + 0.02, 0.06, 0.06, 0.03);
+    let V1 = new Matrix4(headBase);
+    V1.translate(vx, vy - open, vz);
+    V1.rotate(35, 0, 0, 1);
+    V1.translate(inward, down, 0);
+    V1.scale(0.12, 0.035, 0.03);
+    renderCube(mouth, V1);
 
-      // falling tears (cheap detail)
-      faceSphere(tearC, -0.20, tearY, faceZ + 0.10, 0.10, 0.14, 0.10, 2.4, 6);
-      faceSphere(tearC,  0.20, tearY, faceZ + 0.10, 0.10, 0.14, 0.10, 2.4, 6);
-
-    } else {
-      // ======================================================
-      // MODE 1: -V- goofy smile + straight-line eyes + nostrils
-      // ======================================================
-
-      // straight-line eyes: like "_" but slightly tilted is optional
-      // Left eye line
-      faceCube(eyeB, -0.15, 0.12, faceZ + 0.02, 0.16, 0.03, 0.04);
-      // Right eye line
-      faceCube(eyeB,  0.17, 0.12, faceZ + 0.02, 0.16, 0.03, 0.04);
-
-      // Nostrils (goofy)
-      drawNostrils();
-
-     const open = 0.01 + 0.03 * ease;
-
-     const vx = 0.02;
-     const vy = -0.12;
-     const vz = faceZ + 0.03;
-
-     const inward = 0.045;   // smaller = closer together
-     const down   = -0.02;
-
-      // LEFT arm
-     let V1 = new Matrix4(headBase);
-     V1.translate(vx, vy - open, vz);
-     V1.rotate(35, 0, 0, 1);
-     V1.translate(inward, down, 0);
-     V1.scale(0.12, 0.035, 0.03);
-     renderCube(mouth, V1);
-
-      // RIGHT arm
-     let V2 = new Matrix4(headBase);
-     V2.translate(vx, vy - open, vz);
-     V2.rotate(-35, 0, 0, 1);
-     V2.translate(-inward, down, 0);
-     V2.scale(0.12, 0.035, 0.03);
-     renderCube(mouth, V2);
-    }
+    let V2 = new Matrix4(headBase);
+    V2.translate(vx, vy - open, vz);
+    V2.rotate(-35, 0, 0, 1);
+    V2.translate(-inward, down, 0);
+    V2.scale(0.12, 0.035, 0.03);
+    renderCube(mouth, V2);
   }
 }
