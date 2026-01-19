@@ -169,34 +169,26 @@ function tick() {
 function updateAnimationAngles() {
   const a = Math.sin(g_seconds * 2.0);
   const b = Math.sin(g_seconds * 2.0 + Math.PI);
-
   g_leg1 = 25 * a;
   g_leg2 = 18 * Math.abs(a);
-
   g_fr1 = 25 * b;
   g_fr2 = 18 * Math.abs(b);
-
   g_bl1 = 18 * b;
   g_bl2 = 14 * Math.abs(b);
-
   g_br1 = 18 * a;
   g_br2 = 14 * Math.abs(a);
 }
 
 function renderScene() {
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
   const globalRot = new Matrix4();
   globalRot.rotate(g_mouseRotX, 1, 0, 0);
   globalRot.rotate(g_mouseRotY, 0, 1, 0);
   globalRot.rotate(g_globalAngle, 0, 1, 0);
-
   gl.uniformMatrix4fv(u_GlobalRotation, false, globalRot.elements);
-
   const world = new Matrix4();
   world.scale(0.70, 0.70, 0.70);
   world.translate(-0.10, -0.05, 0);
-
   drawTurtle(world);
 }
 function renderCube(color, M) {
@@ -499,8 +491,6 @@ function drawRealHead(world, bodyGreen) {
   const t = g_pokeT;
   const ease = (t < 0.5) ? (2 * t * t) : (1 - Math.pow(-2 * t + 2, 2) / 2);
   const tearY = 0.05 - 0.40 * ease;
-
-  // blush always
   faceCube(blush, -0.24, -0.02, faceZ, 0.11, 0.08, 0.04);
   faceCube(blush, 0.24, -0.02, faceZ, 0.11, 0.08, 0.04);
 

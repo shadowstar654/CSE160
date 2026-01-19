@@ -2,10 +2,8 @@ class Hemisphere {
   constructor() {
     this.color = [1, 1, 1, 1];
     this.matrix = new Matrix4();
-
-    // Similar knobs to your Sphere
-    this.size = 5.7;      // controls radius via size/40 like your Sphere
-    this.latBands = 10;   // more = smoother (keep small for speed)
+    this.size = 5.7;
+    this.latBands = 10;
     this.lonBands = 18;
   }
 
