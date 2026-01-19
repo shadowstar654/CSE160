@@ -526,25 +526,25 @@ function drawRealHead(world, bodyGreen) {
     // CRY eyes (X-ish)
     let L = new Matrix4(headBase);
     L.translate(-0.17, 0.12, faceZ + 0.02);
-    L.rotate(30, 0, 0, 1);
+    L.rotate(-30, 0, 0, 1);
     L.scale(0.16, 0.03, 0.04);
     renderCube(eyeB, L);
 
     L = new Matrix4(headBase);
     L.translate(-0.17, 0.08, faceZ + 0.02);
-    L.rotate(-30, 0, 0, 1);
+    L.rotate(30, 0, 0, 1);
     L.scale(0.16, 0.03, 0.04);
     renderCube(eyeB, L);
 
     let R = new Matrix4(headBase);
     R.translate(0.19, 0.12, faceZ + 0.02);
-    R.rotate(-30, 0, 0, 1);
+    R.rotate(30, 0, 0, 1);
     R.scale(0.16, 0.03, 0.04);
     renderCube(eyeB, R);
 
     R = new Matrix4(headBase);
     R.translate(0.19, 0.08, faceZ + 0.02);
-    R.rotate(30, 0, 0, 1);
+    R.rotate(-30, 0, 0, 1);
     R.scale(0.16, 0.03, 0.04);
     renderCube(eyeB, R);
 
