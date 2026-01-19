@@ -1,4 +1,3 @@
-
 class Sphere {
   constructor() {
     this.color = [1.0, 1.0, 1.0, 1.0];

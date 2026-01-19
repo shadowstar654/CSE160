@@ -1,9 +1,3 @@
-// =========================
-// Cube.js (optimized)
-// - drawTriangle3D uses ONE reusable GPU buffer
-// - avoids gl.createBuffer per triangle
-// =========================
-
 let g_triBuf = null;
 let g_triArr = new Float32Array(9);
 
