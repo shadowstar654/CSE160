@@ -12,37 +12,27 @@ let g_isDragging = false;
 // Poke animation (shift-click)
 let g_pokeStart = -1;
 let g_pokeT = 0;
-let g_pokeMode = 0; // 0 = CRY, 1 = goofy -V- smile + nostrils
+let g_pokeMode = 0;
 
 let g_leg1 = 0;
 let g_leg2 = 0;
 let g_animate = false;
-
-// animation time
+//animations stuff
 let g_startTime = performance.now() / 1000;
 let g_seconds = 0;
-
-// other legs
 let g_fr1 = 0, g_fr2 = 0;
 let g_bl1 = 0, g_bl2 = 0;
 let g_br1 = 0, g_br2 = 0;
-
-// Perf HUD
 let g_perfEl = null;
 let g_lastFrameMS = performance.now();
 let g_fpsSMA = 0;
 let g_msSMA = 0;
-
-// Reuse shapes
 let g_cube = null;
 let g_cyl = null;
 let g_sph = null;
 let g_hemi = null;
 let g_tri = null;
 
-// ==========================================================
-// SHADERS
-// ==========================================================
 const VSHADER_SOURCE = `
 attribute vec4 a_Position;
 uniform mat4 u_ModelMatrix;
@@ -60,7 +50,6 @@ void main() {
 }
 `;
 
-// ==========================================================
 function addMouseControls() {
   function getMouseNorm(ev) {
     const rect = canvas.getBoundingClientRect();
@@ -72,7 +61,6 @@ function addMouseControls() {
   }
 
   canvas.addEventListener('mousedown', (ev) => {
-    // SHIFT+CLICK => poke
     if (ev.shiftKey) {
       g_pokeMode = (g_pokeMode + 1) % 2;
       g_pokeStart = performance.now() / 1000;
@@ -98,9 +86,6 @@ function addMouseControls() {
   });
 }
 
-// ==========================================================
-// MAIN
-// ==========================================================
 function main() {
   canvas = document.getElementById('webgl');
   gl = canvas.getContext('webgl', { preserveDrawingBuffer: true });
@@ -146,13 +131,11 @@ function main() {
   requestAnimationFrame(tick);
 }
 
-// ==========================================================
 function tick() {
   const nowMS = performance.now();
   const dtMS = nowMS - g_lastFrameMS;
   g_lastFrameMS = nowMS;
 
-  // perf smoothing
   const fps = 1000.0 / Math.max(dtMS, 0.0001);
   const alpha = 0.08;
   g_fpsSMA = (g_fpsSMA === 0) ? fps : (g_fpsSMA * (1 - alpha) + fps * alpha);
@@ -167,7 +150,6 @@ function tick() {
 
   g_seconds = nowMS / 1000 - g_startTime;
 
-  // poke anim (1.2s)
   if (g_pokeStart >= 0) {
     const t = (nowMS / 1000 - g_pokeStart) / 1.2;
     g_pokeT = Math.min(Math.max(t, 0), 1);
@@ -184,7 +166,6 @@ function tick() {
   requestAnimationFrame(tick);
 }
 
-// ==========================================================
 function updateAnimationAngles() {
   const a = Math.sin(g_seconds * 2.0);
   const b = Math.sin(g_seconds * 2.0 + Math.PI);
@@ -202,7 +183,6 @@ function updateAnimationAngles() {
   g_br2 = 14 * Math.abs(a);
 }
 
-// ==========================================================
 function renderScene() {
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
@@ -219,10 +199,6 @@ function renderScene() {
 
   drawTurtle(world);
 }
-
-// ==========================================================
-// RENDER HELPERS
-// ==========================================================
 function renderCube(color, M) {
   g_cube.color = color;
   g_cube.matrix.set(M);
@@ -258,10 +234,6 @@ function renderTriPrism(color, M) {
   g_tri.matrix.set(M);
   g_tri.render();
 }
-
-// ==========================================================
-// BIG FLAT SCUTE PADS – tilt inward toward shell center (all directions)
-// ==========================================================
 function drawScutePads(world) {
   const padC = [0.36, 0.26, 0.12, 1.0];
 
@@ -290,7 +262,7 @@ function drawScutePads(world) {
   const cz = 0.02;
 
   // CENTER pad (flat)
-  pad(cx, y, cz, 0.70, 0.28, 0.70, 0, 0);
+  pad(cx, y, cz, 0.70, 0.6, 0.70, 0, 0);
 
   // FRONT pad: tilt DOWN toward center (negative rotX)
   pad(cx, y, cz - 0.5, 0.7, 0.26, 0.7, -25, 0);
@@ -306,9 +278,7 @@ function drawScutePads(world) {
 }
 
 
-// ==========================================================
-// TURTLE
-// ==========================================================
+// ~~ My Turtle ~~
 function drawTurtle(world) {
   const shellDark = [0.40, 0.30, 0.14, 1];
   const shellMid = [0.52, 0.40, 0.20, 1];
@@ -463,9 +433,6 @@ function drawClaws(footCoord, clawColor, toeForward) {
   }
 }
 
-// ==========================================================
-// HEAD + POKE (2 MODES)
-// ==========================================================
 function drawRealHead(world, bodyGreen) {
   const eyeW = [1, 1, 1, 1];
   const eyeB = [0, 0, 0, 1];
