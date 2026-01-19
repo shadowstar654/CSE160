@@ -1,3 +1,8 @@
+// ==========================================================
+// asg2.js (FULL COPY-PASTE READY)
+// Includes: TriPrism class + triangular tail
+// ==========================================================
+
 let canvas, gl;
 let a_Position, u_FragColor, u_ModelMatrix, u_GlobalRotation;
 
@@ -38,6 +43,7 @@ let g_cube = null;
 let g_cyl  = null;
 let g_sph  = null;
 let g_hemi = null;
+let g_tri  = null;
 
 // ==========================================================
 // SHADERS
@@ -124,6 +130,7 @@ function main() {
   g_cyl  = new Cylinder();
   g_sph  = new Sphere();
   g_hemi = new Hemisphere();
+  g_tri  = new TriPrism();
 
   // UI
   const rotEl = document.getElementById('globalRot');
@@ -236,7 +243,6 @@ function renderCylinder(color, M, segments = null) {
   g_cyl.render();
 }
 
-
 function renderSphere(color, M, sCount = 10, size = 5.7) {
   g_sph.color = color;
   g_sph.sCount = sCount;
@@ -252,6 +258,12 @@ function renderHemisphere(color, M, latBands = 12, lonBands = 30, size = 22.0) {
   g_hemi.size = size;
   g_hemi.matrix.set(M);
   g_hemi.render();
+}
+
+function renderTriPrism(color, M) {
+  g_tri.color = color;
+  g_tri.matrix.set(M);
+  g_tri.render();
 }
 
 // ==========================================================
@@ -272,48 +284,48 @@ function drawTurtle(world) {
   M.scale(1.10, 0.18, 1.15);
   renderCube(bodyDark, M);
 
-  // ======================================================
-  // NICE ROUND SHELL (NO GAP)
-  // Layer order:
-  // 1) rim band (light)
-  // 2) skirt (dark) that touches the dome
-  // 3) main dome hemisphere (dark/gold)
-  // 4) top highlight hemisphere (mid)
-  // ======================================================
-
+  // shell rim band
   M = new Matrix4(world);
-  M.translate(0.08, 0.02, 0.00);       // desired CENTER height of the band
-  M.scale(1.70, 0.10, 1.85);           // x/z radius, y height
-  M.translate(0, -0.5, 0);             // center cylinder (0..1) around y=0
+  M.translate(0.08, 0.02, 0.00);
+  M.scale(1.70, 0.10, 1.85);
+  M.translate(0, -0.5, 0);
   renderCylinder(rimLight, M, 40);
 
-  // (B) skirt (dark) — taller, meets dome
+  // shell skirt
   M = new Matrix4(world);
-  M.translate(0.08, 0.10, 0.00);       // desired CENTER height of the skirt
+  M.translate(0.08, 0.10, 0.00);
   M.scale(1.62, 0.26, 1.75);
   M.translate(0, -0.5, 0);
   renderCylinder(shellDark, M, 40);
 
-  // (C) main dome hemisphere (sits on skirt)
+  // main dome hemisphere
   const domeC = [0.62, 0.48, 0.26, 1];
   const domeM = new Matrix4(world);
   domeM.translate(0.08, 0.18, 0.00);
   domeM.scale(1.55, 1.10, 1.65);
   renderHemisphere(domeC, domeM, 12, 30, 21.50);
 
-  // (D) top highlight hemisphere
+  // top highlight hemisphere
   const topM = new Matrix4(world);
   topM.translate(0.08, 0.34, 0.00);
   topM.scale(1.10, 0.80, 1.18);
   renderHemisphere(shellMid, topM, 12, 30, 19.0);
+
   // head + neck
   drawRealHead(world, bodyGreen);
 
-  // tail
+  // ======================================================
+  // TRIANGULAR PRISM TAIL (BIG + CLEAR)
+  // - points backward (negative Z)
+  // - sits under the shell rim, not inside the body
+  // ======================================================
   M = new Matrix4(world);
-  M.translate(0.55, -0.12, -0.80);
-  M.scale(0.22, 0.10, 0.30);
-  renderCube(bodyGreen, M);
+  M.translate(0.18, -0.16, -0.98);  // position behind body
+  M.rotate(180, 0, 1, 0);           // make prism point backward
+  M.rotate(-10, 1, 0, 0);           // slight tilt down
+  M.scale(0.32, 0.22, 0.45);        // BIGGER tail (x,y,z)
+  M.translate(-0.5, 0.0, -0.5);     // anchor base nicely
+  renderTriPrism(bodyGreen, M);
 
   // legs
   drawLegChain(world, {
