@@ -1,3 +1,11 @@
+// ==========================================================
+// asg2.js (FULL COPY-PASTE READY)
+// Turtle with: rounded shell + "paw-print" hemisphere bumps ON TOP (shell scutes)
+// Keeps: mouse rotate, poke face, legs anim, TriPrism tail
+// NOTE: assumes your project already provides: initShaders, Matrix4,
+//       Cube, Cylinder, Sphere, Hemisphere classes (from starter code).
+// ==========================================================
+
 let canvas, gl;
 let a_Position, u_FragColor, u_ModelMatrix, u_GlobalRotation;
 
@@ -5,14 +13,14 @@ let a_Position, u_FragColor, u_ModelMatrix, u_GlobalRotation;
 let g_globalAngle = 0;
 
 // Mouse rotation (drag)
-let g_mouseRotX = 0;   // up/down drag -> rotate around X
-let g_mouseRotY = 0;   // left/right drag -> rotate around Y
+let g_mouseRotX = 0;
+let g_mouseRotY = 0;
 let g_isDragging = false;
 
 // Poke animation (shift-click)
-let g_pokeStart = -1;     // seconds timestamp; -1 means inactive
-let g_pokeT = 0;          // 0..1 normalized progress
-let g_pokeMode = 0;       // 0 = CRY, 1 = goofy -V- smile + nostrils
+let g_pokeStart = -1;
+let g_pokeT = 0;
+let g_pokeMode = 0; // 0 = CRY, 1 = goofy -V- smile + nostrils
 
 let g_leg1 = 0;
 let g_leg2 = 0;
@@ -33,12 +41,12 @@ let g_lastFrameMS = performance.now();
 let g_fpsSMA = 0;
 let g_msSMA = 0;
 
-// Reuse shapes (major speedup)
+// Reuse shapes
 let g_cube = null;
-let g_cyl  = null;
-let g_sph  = null;
+let g_cyl = null;
+let g_sph = null;
 let g_hemi = null;
-let g_tri  = null;
+let g_tri = null;
 
 // ==========================================================
 // SHADERS
@@ -64,17 +72,17 @@ void main() {
 function addMouseControls() {
   function getMouseNorm(ev) {
     const rect = canvas.getBoundingClientRect();
-    const x = (ev.clientX - rect.left) / rect.width;   // 0..1
-    const y = (ev.clientY - rect.top) / rect.height;   // 0..1
-    const nx = (x - 0.5) * 2;                          // -1..1
-    const ny = (0.5 - y) * 2;                          // -1..1 (up positive)
+    const x = (ev.clientX - rect.left) / rect.width;
+    const y = (ev.clientY - rect.top) / rect.height;
+    const nx = (x - 0.5) * 2;
+    const ny = (0.5 - y) * 2;
     return { nx, ny };
   }
 
   canvas.addEventListener('mousedown', (ev) => {
-    // SHIFT+CLICK => poke animation (do NOT start dragging rotation)
+    // SHIFT+CLICK => poke
     if (ev.shiftKey) {
-      g_pokeMode = (g_pokeMode + 1) % 2;  // 0=cry, 1=smile
+      g_pokeMode = (g_pokeMode + 1) % 2;
       g_pokeStart = performance.now() / 1000;
       g_isDragging = false;
       return;
@@ -117,15 +125,14 @@ function main() {
 
   gl.clearColor(0.92, 0.92, 0.97, 1);
 
-  // PERF HUD element
   g_perfEl = document.getElementById('perf');
 
-  // Create reusable shapes AFTER GL is ready
+  // reusable shapes
   g_cube = new Cube();
-  g_cyl  = new Cylinder();
-  g_sph  = new Sphere();
+  g_cyl = new Cylinder();
+  g_sph = new Sphere();
   g_hemi = new Hemisphere();
-  g_tri  = new TriPrism();
+  g_tri = new TriPrism();
 
   // UI
   const rotEl = document.getElementById('globalRot');
@@ -153,13 +160,12 @@ function tick() {
   const dtMS = nowMS - g_lastFrameMS;
   g_lastFrameMS = nowMS;
 
-  // Perf smoothing (EMA)
+  // perf smoothing
   const fps = 1000.0 / Math.max(dtMS, 0.0001);
-  const alpha = 0.08; // smaller = smoother
+  const alpha = 0.08;
   g_fpsSMA = (g_fpsSMA === 0) ? fps : (g_fpsSMA * (1 - alpha) + fps * alpha);
-  g_msSMA  = (g_msSMA  === 0) ? dtMS : (g_msSMA  * (1 - alpha) + dtMS * alpha);
+  g_msSMA = (g_msSMA === 0) ? dtMS : (g_msSMA * (1 - alpha) + dtMS * alpha);
 
-  // Update HUD a few times per second to avoid jitter + DOM churn
   if (g_perfEl) {
     if (!tick._hudLast || nowMS - tick._hudLast > 250) {
       tick._hudLast = nowMS;
@@ -169,7 +175,7 @@ function tick() {
 
   g_seconds = nowMS / 1000 - g_startTime;
 
-  // Poke animation (1.2s)
+  // poke anim (1.2s)
   if (g_pokeStart >= 0) {
     const t = (nowMS / 1000 - g_pokeStart) / 1.2;
     g_pokeT = Math.min(Math.max(t, 0), 1);
@@ -223,7 +229,7 @@ function renderScene() {
 }
 
 // ==========================================================
-// RENDER HELPERS (REUSE OBJECTS)
+// RENDER HELPERS
 // ==========================================================
 function renderCube(color, M) {
   g_cube.color = color;
@@ -262,16 +268,63 @@ function renderTriPrism(color, M) {
 }
 
 // ==========================================================
+// BIG FLAT SCUTE PADS – tilt inward toward shell center (all directions)
+// ==========================================================
+function drawScutePads(world) {
+  const padC = [0.36, 0.26, 0.12, 1.0];
+
+  // rotX = tilt forward/back (toward center)
+  // rotZ = tilt left/right (toward center)
+  function pad(x, y, z, sx, sy, sz, rotX = 0, rotZ = 0, rotY = 0) {
+    const M = new Matrix4(world);
+    M.translate(x, y, z);
+
+    // Optional yaw so pads can "aim" a bit (usually 0 is fine)
+    if (rotY !== 0) M.rotate(rotY, 0, 1, 0);
+
+    // IMPORTANT: tilt inward toward center curvature
+    if (rotX !== 0) M.rotate(rotX, 1, 0, 0);
+    if (rotZ !== 0) M.rotate(rotZ, 0, 0, 1);
+
+    M.scale(sx, sy, sz);
+    renderHemisphere(padC, M, 12, 30, 21.50);
+  }
+
+  // Raise slightly above dome to avoid z-fighting
+  const y = 0.59;
+
+  // Shell center reference (aim toward this)
+  const cx = 0.08;
+  const cz = 0.02;
+
+  // CENTER pad (flat)
+  pad(cx, y, cz, 0.70, 0.28, 0.70, 0, 0);
+
+  // FRONT pad: tilt DOWN toward center (negative rotX)
+  pad(cx, y, cz - 0.5, 0.7, 0.26, 0.7, -25, 0);
+
+  // BACK pad: tilt DOWN toward center (positive rotX)
+  pad(cx, y, cz + 0.4, 0.7, 0.26, 0.7,  25, 0);
+
+  // LEFT pad: tilt DOWN toward center (positive rotZ)
+  pad(cx - 0.4, y, cz, 0.70, 0.26, 0.70, 0,  25);
+
+  // RIGHT pad: tilt DOWN toward center (negative rotZ)
+  pad(cx + 0.45, y, cz, 0.70, 0.26, 0.70, 0, -25);
+}
+
+
+// ==========================================================
 // TURTLE
 // ==========================================================
 function drawTurtle(world) {
-  const shellDark  = [0.40, 0.30, 0.14, 1];
-  const shellMid   = [0.52, 0.40, 0.20, 1];
-  const rimLight   = [0.70, 0.78, 0.58, 1];
+  const shellDark = [0.40, 0.30, 0.14, 1];
+  const shellMid = [0.52, 0.40, 0.20, 1];
+  const rimLight = [0.70, 0.78, 0.58, 1];
 
-  const bodyGreen  = [0.25, 0.70, 0.25, 1];
-  const bodyDark   = [0.18, 0.55, 0.18, 1];
-  const claw       = [0.86, 0.86, 0.82, 1];
+  const bodyGreen = [0.25, 0.70, 0.25, 1];
+  const bodyDark = [0.18, 0.55, 0.18, 1];
+  const claw = [0.86, 0.86, 0.82, 1];
 
   // belly
   let M = new Matrix4(world);
@@ -279,14 +332,14 @@ function drawTurtle(world) {
   M.scale(1.10, 0.18, 1.15);
   renderCube(bodyDark, M);
 
-  // shell rim band
+  // rim band
   M = new Matrix4(world);
   M.translate(0.08, 0.02, 0.00);
   M.scale(1.70, 0.10, 1.85);
   M.translate(0, -0.5, 0);
   renderCylinder(rimLight, M, 40);
 
-  // shell skirt
+  // skirt
   M = new Matrix4(world);
   M.translate(0.08, 0.10, 0.00);
   M.scale(1.62, 0.26, 1.75);
@@ -306,36 +359,35 @@ function drawTurtle(world) {
   topM.scale(1.10, 0.80, 1.18);
   renderHemisphere(shellMid, topM, 12, 30, 19.0);
 
+  // NEW: paw-print hemispheres on top of shell
+  drawScutePads(world);
+
   // head + neck
   drawRealHead(world, bodyGreen);
 
-  // ======================================================
-  // TRIANGULAR PRISM TAIL (BIG + CLEAR)
-  // - points backward (negative Z)
-  // - sits under the shell rim, not inside the body
-  // ======================================================
+  // tail (triangular prism)
   M = new Matrix4(world);
-  M.translate(0.18, -0.16, -0.98);  // position behind body
-  M.rotate(180, 0, 1, 0);           // make prism point backward
-  M.rotate(-10, 1, 0, 0);           // slight tilt down
-  M.scale(0.32, 0.22, 0.45);        // BIGGER tail (x,y,z)
-  M.translate(-0.5, 0.0, -0.5);     // anchor base nicely
+  M.translate(0.18, -0.16, -0.98);
+  M.rotate(180, 0, 1, 0);
+  M.rotate(-10, 1, 0, 0);
+  M.scale(0.32, 0.22, 0.45);
+  M.translate(-0.5, 0.0, -0.5);
   renderTriPrism(bodyGreen, M);
 
   // legs
   drawLegChain(world, {
-    hip: [-0.42, -0.12,  0.56],
+    hip: [-0.42, -0.12, 0.56],
     thighAngle: g_leg1,
-    calfAngle:  g_leg2,
+    calfAngle: g_leg2,
     bodyColor: bodyGreen,
     clawColor: claw,
     toeForward: true
   });
 
   drawLegChain(world, {
-    hip: [ 0.58, -0.12,  0.56],
+    hip: [0.58, -0.12, 0.56],
     thighAngle: g_fr1,
-    calfAngle:  g_fr2,
+    calfAngle: g_fr2,
     bodyColor: bodyGreen,
     clawColor: claw,
     toeForward: true
@@ -344,16 +396,16 @@ function drawTurtle(world) {
   drawLegChain(world, {
     hip: [-0.52, -0.12, -0.60],
     thighAngle: g_bl1,
-    calfAngle:  g_bl2,
+    calfAngle: g_bl2,
     bodyColor: bodyGreen,
     clawColor: claw,
     toeForward: false
   });
 
   drawLegChain(world, {
-    hip: [ 0.62, -0.12, -0.60],
+    hip: [0.62, -0.12, -0.60],
     thighAngle: g_br1,
-    calfAngle:  g_br2,
+    calfAngle: g_br2,
     bodyColor: bodyGreen,
     clawColor: claw,
     toeForward: false
@@ -407,8 +459,8 @@ function drawClaws(footCoord, clawColor, toeForward) {
 
   const toes = [
     [-0.10, -0.06, dz],
-    [ 0.00, -0.06, dz + 0.02],
-    [ 0.10, -0.06, dz],
+    [0.00, -0.06, dz + 0.02],
+    [0.10, -0.06, dz],
   ];
 
   for (const [dx, dy, dz2] of toes) {
@@ -421,28 +473,23 @@ function drawClaws(footCoord, clawColor, toeForward) {
 
 // ==========================================================
 // HEAD + POKE (2 MODES)
-//   mode 0: CRY
-//   mode 1: -V- goofy smile, straight-line eyes, nostrils
 // ==========================================================
 function drawRealHead(world, bodyGreen) {
-  const eyeW  = [1, 1, 1, 1];
-  const eyeB  = [0, 0, 0, 1];
+  const eyeW = [1, 1, 1, 1];
+  const eyeB = [0, 0, 0, 1];
   const blush = [1, 0.6, 0.75, 1];
   const mouth = [0.08, 0.08, 0.08, 1];
   const tearC = [0.25, 0.55, 1.0, 1];
   const nostrilC = [0.05, 0.05, 0.05, 1];
 
-  // head placement
   const headX = 0.00;
   const headY = -0.16;
   const headZ = 1.05;
 
-  // head scale
   const headSX = 0.72;
   const headSY = 0.48;
   const headSZ = 0.60;
 
-  // neck settings
   const neckX = 0.10;
   const neckY = -0.20;
   const neckStartZ = 0.46;
@@ -458,7 +505,7 @@ function drawRealHead(world, bodyGreen) {
   M.scale(0.36, 0.26, 0.36);
   renderCube(bodyGreen, M);
 
-  // neck cylinder (+Z)
+  // neck cylinder
   M = new Matrix4(world);
   M.translate(neckX, neckY, neckStartZ);
   M.rotate(90, 1, 0, 0);
@@ -491,34 +538,33 @@ function drawRealHead(world, bodyGreen) {
 
   const poking = (g_pokeStart >= 0);
   const t = g_pokeT;
-
   const ease = (t < 0.5) ? (2 * t * t) : (1 - Math.pow(-2 * t + 2, 2) / 2);
   const tearY = 0.05 - 0.40 * ease;
 
   // blush always
   faceCube(blush, -0.24, -0.02, faceZ, 0.11, 0.08, 0.04);
-  faceCube(blush,  0.24, -0.02, faceZ, 0.11, 0.08, 0.04);
+  faceCube(blush, 0.24, -0.02, faceZ, 0.11, 0.08, 0.04);
 
   function drawNostrils() {
     faceCube(nostrilC, -0.05, 0.02, faceZ + 0.01, 0.035, 0.035, 0.02);
-    faceCube(nostrilC,  0.05, 0.02, faceZ + 0.01, 0.035, 0.035, 0.02);
+    faceCube(nostrilC, 0.05, 0.02, faceZ + 0.01, 0.035, 0.035, 0.02);
   }
 
   if (!poking) {
-    // NORMAL FACE
-    faceCube(eyeW, -0.16,  0.12, faceZ,        0.12, 0.12, 0.05);
-    faceCube(eyeB, -0.14,  0.12, faceZ + 0.02, 0.05, 0.05, 0.04);
+    // normal eyes
+    faceCube(eyeW, -0.16, 0.12, faceZ, 0.12, 0.12, 0.05);
+    faceCube(eyeB, -0.14, 0.12, faceZ + 0.02, 0.05, 0.05, 0.04);
 
-    faceCube(eyeW,  0.18,  0.12, faceZ,        0.12, 0.12, 0.05);
-    faceCube(eyeB,  0.18,  0.12, faceZ + 0.02, 0.05, 0.05, 0.04);
+    faceCube(eyeW, 0.18, 0.12, faceZ, 0.12, 0.12, 0.05);
+    faceCube(eyeB, 0.18, 0.12, faceZ + 0.02, 0.05, 0.05, 0.04);
 
+    // mouth
     faceCube(mouth, 0.02, -0.12, faceZ + 0.01, 0.18, 0.035, 0.03);
     return;
   }
 
-  // POKE FACE (2 MODES)
   if (g_pokeMode === 0) {
-    // MODE 0: CRY
+    // CRY eyes (X-ish)
     let L = new Matrix4(headBase);
     L.translate(-0.17, 0.12, faceZ + 0.02);
     L.rotate(30, 0, 0, 1);
@@ -546,27 +592,25 @@ function drawRealHead(world, bodyGreen) {
     // cry mouth
     faceCube(mouth, 0.02, -0.14, faceZ + 0.02, 0.20, 0.04, 0.03);
     faceCube(mouth, -0.10, -0.16, faceZ + 0.02, 0.06, 0.06, 0.03);
-    faceCube(mouth,  0.14, -0.16, faceZ + 0.02, 0.06, 0.06, 0.03);
+    faceCube(mouth, 0.14, -0.16, faceZ + 0.02, 0.06, 0.06, 0.03);
 
-    // falling tears
+    // tears
     faceSphere(tearC, -0.20, tearY, faceZ + 0.10, 0.10, 0.14, 0.10, 2.4, 6);
-    faceSphere(tearC,  0.20, tearY, faceZ + 0.10, 0.10, 0.14, 0.10, 2.4, 6);
-
+    faceSphere(tearC, 0.20, tearY, faceZ + 0.10, 0.10, 0.14, 0.10, 2.4, 6);
   } else {
-    // MODE 1: goofy smile
+    // goofy straight eyes
     faceCube(eyeB, -0.15, 0.12, faceZ + 0.02, 0.16, 0.03, 0.04);
-    faceCube(eyeB,  0.17, 0.12, faceZ + 0.02, 0.16, 0.03, 0.04);
+    faceCube(eyeB, 0.17, 0.12, faceZ + 0.02, 0.16, 0.03, 0.04);
 
     drawNostrils();
 
     const open = 0.01 + 0.03 * ease;
-
     const vx = 0.02;
     const vy = -0.12;
     const vz = faceZ + 0.03;
 
     const inward = 0.052;
-    const down   = -0.02;
+    const down = -0.02;
 
     let V1 = new Matrix4(headBase);
     V1.translate(vx, vy - open, vz);

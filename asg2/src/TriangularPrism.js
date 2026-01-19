@@ -8,12 +8,6 @@ class TriPrism {
     const rgba = this.color;
     gl.uniform4f(u_FragColor, rgba[0], rgba[1], rgba[2], rgba[3]);
     gl.uniformMatrix4fv(u_ModelMatrix, false, this.matrix.elements);
-
-    // Triangular prism in unit space:
-    // y is "up", z is "length", x is "width"
-    //
-    // Triangle cross-section on z=0 and z=1:
-    //   A(0,0), B(1,0), C(0.5,1)
     const A0 = [0.0, 0.0, 0.0];
     const B0 = [1.0, 0.0, 0.0];
     const C0 = [0.5, 1.0, 0.0];
