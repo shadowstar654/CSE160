@@ -1,11 +1,3 @@
-// ==========================================================
-// asg2.js (FULL COPY-PASTE READY)
-// Turtle with: rounded shell + "paw-print" hemisphere bumps ON TOP (shell scutes)
-// Keeps: mouse rotate, poke face, legs anim, TriPrism tail
-// NOTE: assumes your project already provides: initShaders, Matrix4,
-//       Cube, Cylinder, Sphere, Hemisphere classes (from starter code).
-// ==========================================================
-
 let canvas, gl;
 let a_Position, u_FragColor, u_ModelMatrix, u_GlobalRotation;
 
