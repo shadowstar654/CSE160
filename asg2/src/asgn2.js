@@ -1,8 +1,3 @@
-// ==========================================================
-// asg2.js (FULL COPY-PASTE READY)
-// Includes: TriPrism class + triangular tail
-// ==========================================================
-
 let canvas, gl;
 let a_Position, u_FragColor, u_ModelMatrix, u_GlobalRotation;
 
