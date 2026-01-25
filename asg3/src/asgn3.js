@@ -78,6 +78,22 @@ const FLOOR_THICK = 0.02;
 const FLOOR_TOP_Y = FLOOR_Y + FLOOR_THICK / 2.0;
 const WALL_DRAW_DIST = 10;   // tweak: 12–22. smaller = faster
 const WALL_DRAW_DIST2 = WALL_DRAW_DIST * WALL_DRAW_DIST;
+// =======================
+// WATER GUN (projectiles)
+// =======================
+let g_waterShots = [];           // {x,y,z, vx,vy,vz, life}
+let g_isShooting = false;
+let g_lastShotTime = 0;
+
+const WATER_RATE = 0.08;         // seconds between shots (smaller = faster)
+const WATER_SPEED = 10.0;        // units/sec
+const WATER_LIFE  = 1.2;         // seconds before disappearing
+const WATER_SIZE  = 0.14;        // cube size
+
+const WATER_COLOR = [0.25, 0.65, 1.0, 1.0];
+
+// win message trigger
+let g_savedShown = false;
 
 let g_map = null;   // heights [z][x]
 
@@ -338,6 +354,11 @@ function moveRight() {
 // ----------------- Controls -----------------
 function addMouseControls() {
   canvas.addEventListener('mousedown', (ev) => {
+    if (ev.ctrlKey) {
+        g_isShooting = true;
+        g_isDragging = false;
+        return;
+   }
     // shift-click = poke mode toggle
     if (ev.shiftKey) {
       g_pokeMode = (g_pokeMode + 1) % 2;
@@ -367,6 +388,7 @@ function addMouseControls() {
 
   window.addEventListener('mouseup', () => {
     g_isDragging = false;
+    g_isShooting = false;   // stop water gun
   });
 
   canvas.addEventListener('wheel', (ev) => {
@@ -474,6 +496,96 @@ function initTexture(imgSrc, onReady) {
 
   img.src = imgSrc + "?v=" + Date.now();
 }
+function spawnWaterShot() {
+  if (!g_camera) return;
+
+  const f = getForwardXZ(); // forward on XZ
+  const ex = g_camera.eye.elements[0];
+  const ez = g_camera.eye.elements[2];
+
+  // IMPORTANT: fixed Y near rocks so shots actually collide (camera is yaw-only)
+  const y = -0.20;
+
+  // spawn a bit in front of player
+  const sx = ex + f.elements[0] * 0.55;
+  const sz = ez + f.elements[2] * 0.55;
+
+  g_waterShots.push({
+    x: sx, y: y, z: sz,
+    vx: f.elements[0] * WATER_SPEED,
+    vy: 0.0,
+    vz: f.elements[2] * WATER_SPEED,
+    life: WATER_LIFE
+  });
+}
+
+function pointHitsBlock(px, py, pz, b) {
+  return (
+    px >= b.x - b.halfX && px <= b.x + b.halfX &&
+    pz >= b.z - b.halfZ && pz <= b.z + b.halfZ &&
+    py >= b.bottomY     && py <= b.topY
+  );
+}
+
+function updateWaterShots(dt) {
+  // fire repeatedly if holding ctrl+mouse
+  if (g_isShooting) {
+    g_lastShotTime += dt;
+    while (g_lastShotTime >= WATER_RATE) {
+      g_lastShotTime -= WATER_RATE;
+      spawnWaterShot();
+    }
+  } else {
+    g_lastShotTime = 0;
+  }
+
+  // move + collide + expire
+  for (let i = g_waterShots.length - 1; i >= 0; i--) {
+    const s = g_waterShots[i];
+
+    s.x += s.vx * dt;
+    s.y += s.vy * dt;
+    s.z += s.vz * dt;
+    s.life -= dt;
+
+    // expire
+    if (s.life <= 0) {
+      g_waterShots.splice(i, 1);
+      continue;
+    }
+
+    // collide with rocks (g_smallBlocks)
+    let hitIndex = -1;
+    for (let j = 0; j < g_smallBlocks.length; j++) {
+      if (pointHitsBlock(s.x, s.y, s.z, g_smallBlocks[j])) {
+        hitIndex = j;
+        break;
+      }
+    }
+
+    if (hitIndex !== -1) {
+      // delete rock + delete shot
+      g_smallBlocks.splice(hitIndex, 1);
+      g_waterShots.splice(i, 1);
+
+      // win message once
+      if (!g_savedShown && g_smallBlocks.length === 0) {
+        g_savedShown = true;
+        showDialogue("Thank you! The turtle has been saved.");
+      }
+    }
+  }
+}
+
+function drawWaterShots(world) {
+  for (let i = 0; i < g_waterShots.length; i++) {
+    const s = g_waterShots[i];
+    let M = new Matrix4(world);
+    M.translate(s.x, s.y, s.z);
+    M.scale(WATER_SIZE, WATER_SIZE, WATER_SIZE);
+    renderCube(WATER_COLOR, M);
+  }
+}
 
 // ----------------- Main -----------------
 function main() {
@@ -563,6 +675,8 @@ function tick() {
   const nowMS = performance.now();
   const dtMS = nowMS - g_lastFrameMS;
   g_lastFrameMS = nowMS;
+  const dt = dtMS / 1000.0;
+  updateWaterShots(dt);
 
   const fps = 1000.0 / Math.max(dtMS, 0.0001);
   const alpha = 0.08;
@@ -777,16 +891,21 @@ for (let z = 0; z < MAP_SIZE; z++) {
 
   
 
-  // a few decorative blocks (same as your old)
-  const rock = [0.55, 0.55, 0.60, 1];
-  for (let i = 0; i < 12; i++) {
-    let B = new Matrix4(world);
-    const x = -3 + (i % 6);
-    const z = -2 + Math.floor(i / 6);
-    B.translate(x, -0.33, z);
-    B.scale(0.6, 0.6, 0.6);
-    renderCube(rock, B);
-  }
+  // draw the gray "rocks" from g_smallBlocks so we can delete them on hit
+const rock = [0.55, 0.55, 0.60, 1];
+for (let i = 0; i < g_smallBlocks.length; i++) {
+  const b = g_smallBlocks[i];
+  const cx = b.x;
+  const cz = b.z;
+  const cy = (b.bottomY + b.topY) * 0.5;
+
+  let B = new Matrix4(world);
+  B.translate(cx, cy, cz);
+  B.scale(b.halfX * 2.0, (b.topY - b.bottomY), b.halfZ * 2.0);
+  renderCube(rock, B);
+}
+
+drawWaterShots(world);
 
   // goal block
   const goal = [1.0, 0.85, 0.25, 1];
