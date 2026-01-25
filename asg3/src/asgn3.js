@@ -345,9 +345,9 @@ function drawWorld(world) {
   M.scale(0.8, 0.8, 0.8);
   renderCube(goal, M);
 }
+ 
 
-// ------------------- YOUR TURTLE CODE BELOW -------------------
-// (Everything below here is your turtle code unchanged)
+// Turtle Code
 function drawScutePads(world) {
   const padC = [0.36, 0.26, 0.12, 1.0];
 
