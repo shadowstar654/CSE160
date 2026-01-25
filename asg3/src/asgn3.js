@@ -1,9 +1,11 @@
-// asgn3.js (FULL FILE TOP + WORLD + CAMERA CONTROLS) — uses YOUR Camera.js exactly
-// Paste this entire file as-is, then paste your existing turtle code below the marker.
+// asgn3.js (FULL FILE) — SOLID WALLS + COLLISION + YOUR TURTLE
+// Uses your existing Cube.js (with drawTriangle3D), Cylinder.js, Sphere.js, Hemisphere.js, TriangularPrism.js, Camera.js
 //
-// IMPORTANT FIXES:
-// 1) DO NOT call main() at the bottom because your HTML already does <body onload="main()">
-// 2) This uses Camera.forward/back/left/right and Camera.panMouse/panLeft/panRight (your API)
+// IMPORTANT:
+// 1) Do NOT call main() at the bottom (your HTML already does <body onload="main()">)
+// 2) This is COLOR-ONLY (no textures) so you can test movement/collision without image/CORS issues
+// 3) Arrow keys + WASD both work
+// 4) Walls are SOLID (collision) based on a 32x32 voxel map
 
 let canvas, gl;
 
@@ -53,6 +55,25 @@ let g_tri = null;
 // camera (YOUR Camera.js)
 let g_camera = null;
 
+// ----------------- VOXEL MAP + WALLS -----------------
+const MAP_SIZE = 32;
+const CELL_SIZE = 1.0;
+
+const FLOOR_Y = -0.35;
+const FLOOR_THICK = 0.02;
+const FLOOR_TOP_Y = FLOOR_Y + FLOOR_THICK / 2.0;
+
+let g_map = null;   // heights [z][x]
+
+// collision tuning
+const PLAYER_RADIUS = 0.20;
+
+// wall colors
+const WALL_COLOR = [0.55, 0.40, 0.22, 1.0];     // brown
+const WALL_EDGE  = [0.45, 0.33, 0.18, 1.0];     // slightly darker
+const FLOOR_COLOR = [0.55, 0.85, 0.55, 1.0];
+const SKY_COLOR = [0.55, 0.75, 1.0, 1.0];
+
 // --- shaders ---
 const VSHADER_SOURCE = `
 attribute vec4 a_Position;
@@ -71,6 +92,130 @@ void main() {
   gl_FragColor = u_FragColor;
 }
 `;
+
+// ----------------- Map building -----------------
+function makeEmptyMap(size) {
+  const m = [];
+  for (let z = 0; z < size; z++) m.push(new Array(size).fill(0));
+  return m;
+}
+
+function buildMap32() {
+  const m = makeEmptyMap(MAP_SIZE);
+
+  // border walls height 4
+  for (let i = 0; i < MAP_SIZE; i++) {
+    m[0][i] = 4;
+    m[MAP_SIZE - 1][i] = 4;
+    m[i][0] = 4;
+    m[i][MAP_SIZE - 1] = 4;
+  }
+
+  // internal walls
+  for (let z = 6; z < 26; z++) {
+    m[z][10] = 3;
+    if (z % 3 === 0) m[z][14] = 2;
+  }
+
+  // small room
+  for (let x = 18; x < 28; x++) {
+    m[8][x] = 3;
+    m[16][x] = 3;
+  }
+  for (let z = 8; z < 17; z++) {
+    m[z][18] = 3;
+    m[z][27] = 3;
+  }
+  m[12][18] = 0; // door
+
+  return m;
+}
+
+// ----------------- Collision helpers -----------------
+function getForwardXZ() {
+  // forward = (at - eye), flatten y, normalize
+  const f = new Vector3(g_camera.at.elements);
+  f.sub(g_camera.eye);
+  f.elements[1] = 0;
+  f.normalize();
+  return f;
+}
+
+function getRightXZ() {
+  const f = getForwardXZ();
+  const r = Vector3.cross(f, g_camera.up);
+  r.elements[1] = 0;
+  r.normalize();
+  return r;
+}
+
+function worldToMap(x, z) {
+  const half = MAP_SIZE / 2;
+  const mx = Math.floor(x / CELL_SIZE + half);
+  const mz = Math.floor(z / CELL_SIZE + half);
+  return [mx, mz];
+}
+
+function isWallAtWorld(x, z, y) {
+  const [mx, mz] = worldToMap(x, z);
+
+  // outside map is solid
+  if (mx < 0 || mz < 0 || mx >= MAP_SIZE || mz >= MAP_SIZE) return true;
+
+  const h = g_map[mz][mx];
+  if (h <= 0) return false;
+
+  const wallBottom = FLOOR_TOP_Y;           // starts at top of floor
+  const wallTop = FLOOR_TOP_Y + h * 1.0;    // each block is 1 high
+
+  return (y >= wallBottom && y <= wallTop);
+}
+
+function tryMove(dx, dz) {
+  const nx = g_camera.eye.elements[0] + dx;
+  const nz = g_camera.eye.elements[2] + dz;
+  const ny = g_camera.eye.elements[1];
+
+  const R = PLAYER_RADIUS;
+
+  // 4-corner collision check
+  if (
+    isWallAtWorld(nx + R, nz + R, ny) ||
+    isWallAtWorld(nx + R, nz - R, ny) ||
+    isWallAtWorld(nx - R, nz + R, ny) ||
+    isWallAtWorld(nx - R, nz - R, ny)
+  ) {
+    return; // blocked
+  }
+
+  g_camera.eye.elements[0] = nx;
+  g_camera.eye.elements[2] = nz;
+  g_camera.at.elements[0] += dx;
+  g_camera.at.elements[2] += dz;
+
+  g_camera.updateView();
+}
+
+function moveForward() {
+  const f = getForwardXZ();
+  const step = g_camera.moveStep || 0.2;
+  tryMove(f.elements[0] * step, f.elements[2] * step);
+}
+function moveBack() {
+  const f = getForwardXZ();
+  const step = g_camera.moveStep || 0.2;
+  tryMove(-f.elements[0] * step, -f.elements[2] * step);
+}
+function moveLeft() {
+  const r = getRightXZ();
+  const step = g_camera.moveStep || 0.2;
+  tryMove(-r.elements[0] * step, -r.elements[2] * step);
+}
+function moveRight() {
+  const r = getRightXZ();
+  const step = g_camera.moveStep || 0.2;
+  tryMove(r.elements[0] * step, r.elements[2] * step);
+}
 
 // ----------------- Controls -----------------
 function addMouseControls() {
@@ -96,12 +241,10 @@ function addMouseControls() {
     g_lastMouseX = ev.clientX;
     g_lastMouseY = ev.clientY;
 
-    // YOUR Camera supports yaw-only panMouse
-    const sensitivity = 0.20; // tweak if you want
+    const sensitivity = 0.20;
     g_camera.panMouse(dx * sensitivity);
-
-    // (You don't have pitch in your Camera class; that's fine.)
-    // dy ignored on purpose.
+    // dy ignored (your Camera is yaw-only)
+    void dy;
   });
 
   window.addEventListener('mouseup', () => {
@@ -120,18 +263,18 @@ function addKeyboardControls() {
     const k = ev.key.toLowerCase();
 
     // WASD
-    if (k === 'w') g_camera.forward();
-    else if (k === 's') g_camera.back();
-    else if (k === 'a') g_camera.left();
-    else if (k === 'd') g_camera.right();
+    if (k === 'w') moveForward();
+    else if (k === 's') moveBack();
+    else if (k === 'a') moveLeft();
+    else if (k === 'd') moveRight();
     else if (k === 'q') g_camera.panLeft();
     else if (k === 'e') g_camera.panRight();
 
-    // Arrow keys too (per your notes to grader)
-    else if (ev.key === 'ArrowUp') g_camera.forward();
-    else if (ev.key === 'ArrowDown') g_camera.back();
-    else if (ev.key === 'ArrowLeft') g_camera.left();
-    else if (ev.key === 'ArrowRight') g_camera.right();
+    // Arrow keys
+    else if (ev.key === 'ArrowUp') moveForward();
+    else if (ev.key === 'ArrowDown') moveBack();
+    else if (ev.key === 'ArrowLeft') moveLeft();
+    else if (ev.key === 'ArrowRight') moveRight();
   });
 }
 
@@ -161,16 +304,13 @@ function main() {
   g_sph = new Sphere();
   g_hemi = new Hemisphere();
 
-  // ---- IMPORTANT: TriangularPrism file name mismatch guard ----
-  // Your HTML loads TriangularPrism.js, but your turtle code uses renderTriPrism() with g_tri.
-  // Some people name the class TriangularPrism, some name it TriPrism.
-  // This makes it work either way.
+  // TriangularPrism guard
   if (typeof TriPrism !== 'undefined') g_tri = new TriPrism();
   else if (typeof TriangularPrism !== 'undefined') g_tri = new TriangularPrism();
-  else {
-    // If this happens, your TriangularPrism.js didn't load or class name differs.
-    console.error('Tri prism class not found (TriPrism or TriangularPrism). Check TriangularPrism.js.');
-  }
+  else console.error('Tri prism class not found (TriPrism or TriangularPrism). Check TriangularPrism.js.');
+
+  // build map
+  g_map = buildMap32();
 
   // camera (YOUR camera)
   g_camera = new Camera();
@@ -252,18 +392,14 @@ function updateAnimationAngles() {
 function renderScene() {
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-  // camera matrices drive everything
   gl.uniformMatrix4fv(u_ProjectionMatrix, false, g_camera.projMat.elements);
   gl.uniformMatrix4fv(u_ViewMatrix, false, g_camera.viewMat.elements);
 
-  // World base transform (optional slider rotation around Y)
   const world = new Matrix4();
   world.rotate(g_globalAngle, 0, 1, 0);
 
-  // draw environment
   drawWorld(world);
 
-  // turtle ABOVE ground (so it isn't stuck inside the floor)
   const turtleWorld = new Matrix4(world);
   turtleWorld.translate(0, 0.18, 0);
   turtleWorld.scale(0.70, 0.70, 0.70);
@@ -309,25 +445,52 @@ function renderTriPrism(color, M) {
   g_tri.render();
 }
 
-// ---------- simple world ----------
+// ---------- world (sky + floor + SOLID wall blocks + some misc blocks) ----------
 function drawWorld(world) {
-    // SKY FIRST
+  // SKY
   gl.disable(gl.DEPTH_TEST);
-  const skyC = [0.55, 0.75, 1.0, 1.0];
   let S = new Matrix4(world);
   S.scale(1000, 1000, 1000);
   S.scale(-1, 1, 1);
-  renderCube(skyC, S);
+  renderCube(SKY_COLOR, S);
   gl.enable(gl.DEPTH_TEST);
 
   // floor
-  const floorC = [0.55, 0.85, 0.55, 1];
-  let M = new Matrix4(world);
-  M.translate(0, -0.35, 0);
-  M.scale(20, 0.02, 20);
-  renderCube(floorC, M);
+  let F = new Matrix4(world);
+  F.translate(0, FLOOR_Y, 0);
+  F.scale(20, FLOOR_THICK, 20);
+  renderCube(FLOOR_COLOR, F);
 
-  // some blocks
+  // draw walls from voxel map (SOLID collision uses same map)
+  const half = MAP_SIZE / 2;
+  const baseY = FLOOR_TOP_Y + 0.5; // each cube centered at y = floorTop + 0.5
+
+  for (let z = 0; z < MAP_SIZE; z++) {
+    for (let x = 0; x < MAP_SIZE; x++) {
+      const h = g_map[z][x];
+      if (h <= 0) continue;
+
+      for (let y = 0; y < h; y++) {
+        const wx = (x - half) * CELL_SIZE;
+        const wy = baseY + y * 1.0;
+        const wz = (z - half) * CELL_SIZE;
+
+        // main cube
+        let W = new Matrix4(world);
+        W.translate(wx, wy, wz);
+        W.scale(1.0, 1.0, 1.0);
+        renderCube(WALL_COLOR, W);
+
+        // tiny outline-ish darker cap (makes walls easier to see)
+        let Cap = new Matrix4(world);
+        Cap.translate(wx, wy + 0.51, wz);
+        Cap.scale(1.02, 0.05, 1.02);
+        renderCube(WALL_EDGE, Cap);
+      }
+    }
+  }
+
+  // a few decorative blocks (same as your old)
   const rock = [0.55, 0.55, 0.60, 1];
   for (let i = 0; i < 12; i++) {
     let B = new Matrix4(world);
@@ -340,14 +503,16 @@ function drawWorld(world) {
 
   // goal block
   const goal = [1.0, 0.85, 0.25, 1];
-  M = new Matrix4(world);
-  M.translate(3, -0.25, -3);
-  M.scale(0.8, 0.8, 0.8);
-  renderCube(goal, M);
+  let G = new Matrix4(world);
+  G.translate(3, -0.25, -3);
+  G.scale(0.8, 0.8, 0.8);
+  renderCube(goal, G);
 }
- 
 
-// Turtle Code
+// =======================
+// TURTLE CODE (yours)
+// =======================
+
 function drawScutePads(world) {
   const padC = [0.36, 0.26, 0.12, 1.0];
 
