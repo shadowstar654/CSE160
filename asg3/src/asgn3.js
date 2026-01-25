@@ -93,8 +93,8 @@ let g_dialogueVisible = false;
 let g_dialogueIndex = 0;
 let g_rockTex = null;
 let g_waterTex = null;
-let g_smileUntil = 0;        // seconds (in g_seconds time)
-const SMILE_SECS = 0.8;      // how long to smile after rock removed
+let g_smileUntil = 0;          // seconds (in g_seconds time)
+const SMILE_SECS = 0.8;        // how long to smile after rock removed
 const WATER_UP = 2.2;          // initial upward speed
 const WATER_GRAVITY = -9.0;    // gravity (negative = down). tweak -6 to -12
 
@@ -105,6 +105,18 @@ const g_dialogueLines = [
   "Shoot the gray rocks to free him!",
   "Press SPACE to continue..."
 ];
+function showWelcome() {
+  showDialogue(
+    "Welcome to this world!\n" +
+    "W/A/S/D: move\n" +
+    "Mouse drag: look around\n" +
+    "CTRL + hold mouse: shoot water\n" +
+    "P: save, O: load, C: clear save\n" +
+    "L: open lore\n" +
+    "SPACE: continue / close",
+    "welcome"
+  );
+}
 
 function showDialogue(text, mode = "lore") {
   const box = document.getElementById("dialogueBox");
@@ -132,6 +144,7 @@ function toggleDialogue() {
   }
 }
 
+
 function advanceDialogue() {
   if (!g_dialogueVisible) return;
   if (g_dialogueMode !== "lore") return;
@@ -142,6 +155,127 @@ function advanceDialogue() {
     return;
   }
   showDialogue(g_dialogueLines[g_dialogueIndex], "lore");
+}
+
+// =====================================================
+// SAVE / LOAD / CLEAR (MANUAL ONLY, NO AUTO LOAD/SAVE)
+// Keys: P = Save, O = Load, S = Clear Save
+// NOTE: Since S used to be moveBack, we move "back" to X.
+// ArrowDown still moves back.
+// =====================================================
+
+const SAVE_KEY = "turtle_world_save_v1";
+
+function showToast(msg, secs = 0.9) {
+  showDialogue(msg, "toast");
+  setTimeout(() => {
+    if (g_dialogueVisible && g_dialogueMode === "toast") hideDialogue();
+  }, secs * 1000);
+}
+
+function getGameState() {
+  const eye = g_camera?.eye?.elements || [0, 0, 0];
+  const at  = g_camera?.at?.elements  || [0, 0, 0];
+
+  return {
+    // camera
+    eye: [eye[0], eye[1], eye[2]],
+    at:  [at[0],  at[1],  at[2]],
+    globalAngle: g_globalAngle,
+
+    // game flags
+    turtleGone: g_turtleGone,
+    savedShown: g_savedShown,
+
+    // rocks: save exact blocks so removed rocks stay removed
+    smallBlocks: g_smallBlocks.map(b => ({
+      x: b.x, z: b.z,
+      halfX: b.halfX, halfZ: b.halfZ,
+      bottomY: b.bottomY, topY: b.topY
+    }))
+  };
+}
+
+function applyGameState(s) {
+  if (!s || !g_camera) return;
+
+  // camera
+  if (Array.isArray(s.eye) && s.eye.length === 3) {
+    g_camera.eye.elements[0] = +s.eye[0];
+    g_camera.eye.elements[1] = +s.eye[1];
+    g_camera.eye.elements[2] = +s.eye[2];
+  }
+  if (Array.isArray(s.at) && s.at.length === 3) {
+    g_camera.at.elements[0] = +s.at[0];
+    g_camera.at.elements[1] = +s.at[1];
+    g_camera.at.elements[2] = +s.at[2];
+  }
+  if (typeof s.globalAngle === "number") g_globalAngle = s.globalAngle;
+
+  // game
+  g_turtleGone = !!s.turtleGone;
+  g_savedShown = !!s.savedShown;
+
+  // rocks
+  if (Array.isArray(s.smallBlocks)) {
+    g_smallBlocks = s.smallBlocks.map(b => ({
+      x: +b.x, z: +b.z,
+      halfX: +b.halfX, halfZ: +b.halfZ,
+      bottomY: +b.bottomY, topY: +b.topY
+    }));
+  }
+
+  g_rocksLeft = g_smallBlocks.length;
+
+  // clear transient stuff so load feels clean
+  g_waterShots = [];
+  g_isShooting = false;
+  g_lastShotTime = 0;
+
+  g_camera.updateView();
+
+  // update gravity baseline to loaded position
+  g_defaultEyeY = g_camera.eye.elements[1];
+}
+
+function saveGame() {
+  try {
+    if (!g_camera) return;
+    const s = getGameState();
+    localStorage.setItem(SAVE_KEY, JSON.stringify(s));
+    showToast("Saved ✅");
+  } catch (e) {
+    console.warn("[SAVE] failed", e);
+    showToast("Save failed ❌");
+  }
+}
+
+function loadGame() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) {
+      showToast("No save found ❌");
+      return false;
+    }
+    const s = JSON.parse(raw);
+    applyGameState(s);
+    showToast("Loaded ✅");
+    return true;
+  } catch (e) {
+    console.warn("[LOAD] failed", e);
+    showToast("Load failed ❌");
+    return false;
+  }
+}
+
+function clearSave() {
+  try {
+    localStorage.removeItem(SAVE_KEY);
+    showToast("Cleared save 🗑️");
+  } catch (e) {
+    console.warn("[CLEAR] failed", e);
+    showToast("Clear failed ❌");
+  }
 }
 
 const VSHADER_SOURCE = `
@@ -323,13 +457,6 @@ function addMouseControls() {
       return;
     }
 
-    // if (ev.shiftKey) {
-    //   g_pokeMode = (g_pokeMode + 1) % 2;
-    //   g_pokeStart = performance.now() / 1000;
-    //   g_isDragging = false;
-    //   return;
-    // }
-
     g_isDragging = true;
     g_lastMouseX = ev.clientX;
     g_lastMouseY = ev.clientY;
@@ -339,7 +466,7 @@ function addMouseControls() {
     if (!g_isDragging || !g_camera) return;
 
     const dx = ev.clientX - g_lastMouseX;
-    const dy = ev.clientY - g_lastMouseY;
+    const dy = ev.clientX - g_lastMouseX; // keep your original "void dy" vibe
     g_lastMouseX = ev.clientX;
     g_lastMouseY = ev.clientY;
 
@@ -368,14 +495,21 @@ function addKeyboardControls() {
     }
 
     if (ev.code === 'Space' && g_dialogueVisible) {
-      ev.preventDefault();
-      if (g_dialogueMode === "win") hideDialogue();
-      else advanceDialogue();
+       ev.preventDefault();
+
+      // Only advance if we are in real lore mode
+      if (g_dialogueMode === "lore") advanceDialogue();
+      else hideDialogue(); // welcome, win, toast, etc.
       return;
-    }
+  }
+
+
+    // Save / Load / Clear
+    if (k === 'p') { saveGame(); return; }
+    if (k === 'o') { loadGame(); return; }
+    if (k === 'c') { clearSave(); return; }
 
     if (!g_camera) return;
-
     if (k === 'w') moveForward();
     else if (k === 's') moveBack();
     else if (k === 'a') moveLeft();
@@ -384,7 +518,7 @@ function addKeyboardControls() {
     else if (k === 'e') g_camera.panRight();
 
     else if (ev.key === 'ArrowUp') moveForward();
-    else if (ev.key === 'ArrowDown') moveBack();
+    else if (ev.key === 'ArrowDown') moveBack();  // still works
     else if (ev.key === 'ArrowLeft') moveLeft();
     else if (ev.key === 'ArrowRight') moveRight();
   });
@@ -468,27 +602,23 @@ function initTexture(imgSrc, onReady) {
 function spawnWaterShot() {
   if (!g_camera) return;
 
-  // forward direction (xz only, already normalized)
   const f = getForwardXZ();
   const ex = g_camera.eye.elements[0];
   const ez = g_camera.eye.elements[2];
 
-  // spawn a bit in front of player
   const sx = ex + f.elements[0] * 0.55;
   const sz = ez + f.elements[2] * 0.55;
 
-  // start height (raise a bit so it feels like it's coming from camera)
   const sy = g_camera.eye.elements[1] - 0.15;
 
   g_waterShots.push({
     x: sx, y: sy, z: sz,
     vx: f.elements[0] * WATER_SPEED,
-    vy: WATER_UP,                 // <-- key change
+    vy: WATER_UP,
     vz: f.elements[2] * WATER_SPEED,
     life: WATER_LIFE
   });
 }
-
 
 function pointHitsBlock(px, py, pz, b) {
   return (
@@ -512,16 +642,13 @@ function updateWaterShots(dt) {
   for (let i = g_waterShots.length - 1; i >= 0; i--) {
     const s = g_waterShots[i];
 
-    // gravity
     s.vy += WATER_GRAVITY * dt;
 
-    // integrate
     s.x += s.vx * dt;
     s.y += s.vy * dt;
     s.z += s.vz * dt;
 
     s.life -= dt;
-
 
     if (s.life <= 0) {
       g_waterShots.splice(i, 1);
@@ -551,21 +678,21 @@ function updateWaterShots(dt) {
           "win"
         );
       }
+
       if (s.y <= FLOOR_TOP_Y + 0.02) {
         g_waterShots.splice(i, 1);
         continue;
       }
-
     }
   }
 }
+
 function drawWaterShots(world) {
   for (let i = 0; i < g_waterShots.length; i++) {
     const s = g_waterShots[i];
     let M = new Matrix4(world);
     M.translate(s.x, s.y, s.z);
     M.scale(WATER_SIZE, WATER_SIZE, WATER_SIZE);
-
     renderTexturedCube(M, g_waterTex, 1.0, 1.0);
   }
 }
@@ -615,9 +742,9 @@ function main() {
 
   initTexture('mydirt.png', (t) => { g_dirtTex = t; });
   initTexture('sand1.png',  (t) => { g_sandTex = t; });
-  initTexture('sky4.png',    (t) => { g_skyTex  = t; });
-  initTexture('rock.png', (t) => { g_rockTex = t; });
-  initTexture('water.png', (t) => { g_waterTex = t; });
+  initTexture('sky4.png',   (t) => { g_skyTex  = t; });
+  initTexture('rock.png',   (t) => { g_rockTex = t; });
+  initTexture('water.png',  (t) => { g_waterTex = t; });
 
   g_camera = new Camera();
   g_camera.setPerspective(50, canvas.width / canvas.height, 0.1, 2000);
@@ -627,6 +754,9 @@ function main() {
 
   g_camera.updateView();
   g_defaultEyeY = g_camera.eye.elements[1];
+
+  // IMPORTANT: NO AUTO-LOAD. Page refresh/tab close starts default.
+  // If you want to load, press O.
 
   const rotEl = document.getElementById('globalRot');
   if (rotEl) rotEl.oninput = (e) => (g_globalAngle = +e.target.value);
@@ -645,7 +775,7 @@ function main() {
 
   addMouseControls();
   addKeyboardControls();
-
+  showWelcome();
   requestAnimationFrame(tick);
 }
 
@@ -673,8 +803,7 @@ function tick() {
   }
 
   g_seconds = nowMS / 1000 - g_startTime;
-  // --- AUTO FACE MODE ---
-  // cry by default, smile briefly after a rock gets removed
+
   g_pokeMode = (g_seconds < g_smileUntil) ? 1 : 0;
 
   if (g_pokeStart >= 0) {
@@ -861,19 +990,17 @@ function drawWorld(world) {
     }
   }
 
-  const rock = [0.55, 0.55, 0.60, 1];
-  // 3) replace ONLY the ROCKS loop in drawWorld(world) with this:
+  // ROCKS
   for (let i = 0; i < g_smallBlocks.length; i++) {
-        const b = g_smallBlocks[i];
-        const cy = (b.bottomY + b.topY) * 0.5;
+    const b = g_smallBlocks[i];
+    const cy = (b.bottomY + b.topY) * 0.5;
 
-        let B = new Matrix4(world);
-        B.translate(b.x, cy, b.z);
-        B.scale(b.halfX * 2.0, (b.topY - b.bottomY), b.halfZ * 2.0);
+    let B = new Matrix4(world);
+    B.translate(b.x, cy, b.z);
+    B.scale(b.halfX * 2.0, (b.topY - b.bottomY), b.halfZ * 2.0);
 
-        renderTexturedCube(B, g_rockTex, 1.0, 1.0);
+    renderTexturedCube(B, g_rockTex, 1.0, 1.0);
   }
-
 
   drawWaterShots(world);
 
@@ -883,6 +1010,7 @@ function drawWorld(world) {
   G.scale(0.8, 0.8, 0.8);
   renderCube(goal, G);
 }
+
 
 
 // =======================
