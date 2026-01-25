@@ -11,6 +11,14 @@ let canvas, gl;
 
 // GLSL
 let a_Position;
+// ---- texture globals ----
+let a_UV = null;
+let u_UVScale = null;
+let u_Sampler = null;
+let u_UseTexture = null;
+let g_dirtTex = null;
+let g_sandTex = null;      // NEW
+
 let u_FragColor, u_ModelMatrix;
 let u_ViewMatrix, u_ProjectionMatrix;
 
@@ -54,6 +62,12 @@ let g_tri = null;
 
 // camera (YOUR Camera.js)
 let g_camera = null;
+// --- climb / small-block stepping ---
+let g_smallBlocks = [];      // list of climbable blocks (AABB)
+let g_defaultEyeY = 0;       // remember camera's normal height
+
+const STEP_MAX = 0.40;       // max height we can "step up" (tweak 0.30–0.55)
+const GRAVITY_DOWN = 0.03;   // how fast we fall back to default
 
 // ----------------- VOXEL MAP + WALLS -----------------
 const MAP_SIZE = 32;
@@ -62,6 +76,8 @@ const CELL_SIZE = 1.0;
 const FLOOR_Y = -0.35;
 const FLOOR_THICK = 0.02;
 const FLOOR_TOP_Y = FLOOR_Y + FLOOR_THICK / 2.0;
+const WALL_DRAW_DIST = 10;   // tweak: 12–22. smaller = faster
+const WALL_DRAW_DIST2 = WALL_DRAW_DIST * WALL_DRAW_DIST;
 
 let g_map = null;   // heights [z][x]
 
@@ -74,24 +90,91 @@ const WALL_EDGE  = [0.45, 0.33, 0.18, 1.0];     // slightly darker
 const FLOOR_COLOR = [0.55, 0.85, 0.55, 1.0];
 const SKY_COLOR = [0.55, 0.75, 1.0, 1.0];
 
-// --- shaders ---
 const VSHADER_SOURCE = `
 attribute vec4 a_Position;
+attribute vec2 a_UV;
+
 uniform mat4 u_ModelMatrix;
 uniform mat4 u_ViewMatrix;
 uniform mat4 u_ProjectionMatrix;
+
+varying vec2 v_UV;
+
 void main() {
   gl_Position = u_ProjectionMatrix * u_ViewMatrix * u_ModelMatrix * a_Position;
+  v_UV = a_UV;
 }
 `;
 
+
 const FSHADER_SOURCE = `
 precision mediump float;
+
 uniform vec4 u_FragColor;
+uniform sampler2D u_Sampler;
+uniform int u_UseTexture;
+uniform vec2 u_UVScale;
+
+varying vec2 v_UV;
+
 void main() {
-  gl_FragColor = u_FragColor;
+  if (u_UseTexture == 1) {
+    gl_FragColor = texture2D(u_Sampler, v_UV * u_UVScale);
+  } else {
+    gl_FragColor = u_FragColor;
+  }
 }
 `;
+
+// =======================
+// RETRO DIALOGUE (Lore UI)
+// =======================
+let g_dialogueVisible = false;
+let g_dialogueIndex = 0;
+
+const g_dialogueLines = [
+  "Hello! Welcome to the world of this homie turtle.",
+  "He is currently trapped under some rocks and cannot get home.",
+  "Use your water gun (CTRL + hold mouse) to get rid of the rocks.",
+  "Shoot the textured blocks at the gray rocks to free him!",
+  "Press SPACE to continue..."
+];
+
+function showDialogue(text) {
+  const box = document.getElementById("dialogueBox");
+  const p = document.getElementById("dialogueText");
+  if (!box || !p) return;
+  p.innerText = text;
+  box.classList.remove("hidden");
+  g_dialogueVisible = true;
+}
+
+function hideDialogue() {
+  const box = document.getElementById("dialogueBox");
+  if (!box) return;
+  box.classList.add("hidden");
+  g_dialogueVisible = false;
+}
+
+function toggleDialogue() {
+  if (g_dialogueVisible) {
+    hideDialogue();
+  } else {
+    g_dialogueIndex = 0;
+    showDialogue(g_dialogueLines[g_dialogueIndex]);
+  }
+}
+
+function advanceDialogue() {
+  if (!g_dialogueVisible) return;
+
+  g_dialogueIndex++;
+  if (g_dialogueIndex >= g_dialogueLines.length) {
+    hideDialogue();
+    return;
+  }
+  showDialogue(g_dialogueLines[g_dialogueIndex]);
+}
 
 // ----------------- Map building -----------------
 function makeEmptyMap(size) {
@@ -156,44 +239,79 @@ function worldToMap(x, z) {
   return [mx, mz];
 }
 
-function isWallAtWorld(x, z, y) {
-  const [mx, mz] = worldToMap(x, z);
+function isSolidAtWorld(x, z, y) {
+  // ---- walls (voxel map) ----
+  {
+    const [mx, mz] = worldToMap(x, z);
 
-  // outside map is solid
-  if (mx < 0 || mz < 0 || mx >= MAP_SIZE || mz >= MAP_SIZE) return true;
+    // outside map is solid
+    if (mx < 0 || mz < 0 || mx >= MAP_SIZE || mz >= MAP_SIZE) return true;
 
-  const h = g_map[mz][mx];
-  if (h <= 0) return false;
+    const h = g_map[mz][mx];
+    if (h > 0) {
+      const wallBottom = FLOOR_TOP_Y;
+      const wallTop = FLOOR_TOP_Y + h * 1.0;
+      if (y >= wallBottom && y <= wallTop) return true;
+    }
+  }
 
-  const wallBottom = FLOOR_TOP_Y;           // starts at top of floor
-  const wallTop = FLOOR_TOP_Y + h * 1.0;    // each block is 1 high
+  // ---- small climbable blocks (gray) ----
+  for (let i = 0; i < g_smallBlocks.length; i++) {
+    const b = g_smallBlocks[i];
 
-  return (y >= wallBottom && y <= wallTop);
+    if (x >= b.x - b.halfX && x <= b.x + b.halfX &&
+        z >= b.z - b.halfZ && z <= b.z + b.halfZ &&
+        y >= b.bottomY && y <= b.topY) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function canStandAt(x, z, y) {
+  const R = PLAYER_RADIUS;
+  return !(
+    isSolidAtWorld(x + R, z + R, y) ||
+    isSolidAtWorld(x + R, z - R, y) ||
+    isSolidAtWorld(x - R, z + R, y) ||
+    isSolidAtWorld(x - R, z - R, y)
+  );
 }
 
 function tryMove(dx, dz) {
   const nx = g_camera.eye.elements[0] + dx;
   const nz = g_camera.eye.elements[2] + dz;
-  const ny = g_camera.eye.elements[1];
 
-  const R = PLAYER_RADIUS;
+  const ey = g_camera.eye.elements[1];
 
-  // 4-corner collision check
-  if (
-    isWallAtWorld(nx + R, nz + R, ny) ||
-    isWallAtWorld(nx + R, nz - R, ny) ||
-    isWallAtWorld(nx - R, nz + R, ny) ||
-    isWallAtWorld(nx - R, nz - R, ny)
-  ) {
-    return; // blocked
+  // 1) normal move at current height
+  if (canStandAt(nx, nz, ey)) {
+    g_camera.eye.elements[0] = nx;
+    g_camera.eye.elements[2] = nz;
+    g_camera.at.elements[0] += dx;
+    g_camera.at.elements[2] += dz;
+    g_camera.updateView();
+    return;
   }
 
-  g_camera.eye.elements[0] = nx;
-  g_camera.eye.elements[2] = nz;
-  g_camera.at.elements[0] += dx;
-  g_camera.at.elements[2] += dz;
+  // 2) step-up attempt (climb small blocks)
+  const stepY = ey + STEP_MAX;
+  if (canStandAt(nx, nz, stepY)) {
+    g_camera.eye.elements[0] = nx;
+    g_camera.eye.elements[2] = nz;
+    g_camera.at.elements[0] += dx;
+    g_camera.at.elements[2] += dz;
 
-  g_camera.updateView();
+    // lift camera up
+    g_camera.eye.elements[1] = stepY;
+    g_camera.at.elements[1] = (g_camera.at.elements[1] || g_defaultEyeY) + STEP_MAX;
+
+    g_camera.updateView();
+    return;
+  }
+
+  // otherwise blocked
 }
 
 function moveForward() {
@@ -258,9 +376,21 @@ function addMouseControls() {
 
 function addKeyboardControls() {
   document.addEventListener('keydown', (ev) => {
-    if (!g_camera) return;
-
     const k = ev.key.toLowerCase();
+
+    // --- Lore keys should ALWAYS work (even if camera isn't ready) ---
+    if (k === 'l') {
+      toggleDialogue();
+      return;
+    }
+    if (ev.code === 'Space' && g_dialogueVisible) {
+      ev.preventDefault();        // stops page scrolling
+      advanceDialogue();
+      return;
+    }
+
+    // --- movement keys require camera ---
+    if (!g_camera) return;
 
     // WASD
     if (k === 'w') moveForward();
@@ -278,6 +408,73 @@ function addKeyboardControls() {
   });
 }
 
+
+function buildSmallBlocks() {
+  // These match the gray blocks you draw in drawWorld():
+  // centerY = -0.33, scale = 0.6 -> half = 0.3
+  const half = 0.30;
+  const centerY = -0.33;
+  const bottomY = centerY - half;
+  const topY = centerY + half;
+
+  const blocks = [];
+  for (let i = 0; i < 12; i++) {
+    const x = -3 + (i % 6);
+    const z = -2 + Math.floor(i / 6);
+
+    blocks.push({
+      x, z,
+      halfX: half,
+      halfZ: half,
+      bottomY,
+      topY
+    });
+  }
+  return blocks;
+}
+function isPowerOf2(v) { return (v & (v - 1)) === 0; }
+
+function initTexture(imgSrc, onReady) {
+  const tex = gl.createTexture();
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+
+  img.onload = () => {
+    console.log("[Texture OK]", imgSrc, "size:", img.width, "x", img.height);
+
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+
+    const pot = isPowerOf2(img.width) && isPowerOf2(img.height);
+
+    if (pot) {
+      // allows tiling + mipmaps (best quality)
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    } else {
+      // NPOT-safe fallback (no repeat)
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    }
+
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    onReady(tex);
+  };
+
+  img.onerror = (e) => {
+    console.error("[Texture FAIL]", imgSrc, e);
+  };
+
+  img.src = imgSrc + "?v=" + Date.now();
+}
+
 // ----------------- Main -----------------
 function main() {
   canvas = document.getElementById('webgl');
@@ -289,21 +486,36 @@ function main() {
   if (!initShaders(gl, VSHADER_SOURCE, FSHADER_SOURCE)) return;
 
   a_Position = gl.getAttribLocation(gl.program, 'a_Position');
-  u_FragColor = gl.getUniformLocation(gl.program, 'u_FragColor');
-  u_ModelMatrix = gl.getUniformLocation(gl.program, 'u_ModelMatrix');
-  u_ViewMatrix = gl.getUniformLocation(gl.program, 'u_ViewMatrix');
-  u_ProjectionMatrix = gl.getUniformLocation(gl.program, 'u_ProjectionMatrix');
+a_UV = gl.getAttribLocation(gl.program, 'a_UV');
+
+u_FragColor = gl.getUniformLocation(gl.program, 'u_FragColor');
+u_ModelMatrix = gl.getUniformLocation(gl.program, 'u_ModelMatrix');
+u_ViewMatrix = gl.getUniformLocation(gl.program, 'u_ViewMatrix');
+u_ProjectionMatrix = gl.getUniformLocation(gl.program, 'u_ProjectionMatrix');
+
+u_Sampler = gl.getUniformLocation(gl.program, 'u_Sampler');
+u_UseTexture = gl.getUniformLocation(gl.program, 'u_UseTexture');
+u_UVScale = gl.getUniformLocation(gl.program, 'u_UVScale');
+
+// defaults
+gl.uniform1i(u_UseTexture, 0);
+gl.uniform2f(u_UVScale, 1.0, 1.0);
+
+
+// default = color mode
+gl.uniform1i(u_UseTexture, 0);
+
 
   gl.clearColor(0.92, 0.92, 0.97, 1);
 
   g_perfEl = document.getElementById('perf');
-
+   
   // reusable shapes
   g_cube = new Cube();
   g_cyl = new Cylinder();
   g_sph = new Sphere();
   g_hemi = new Hemisphere();
-
+  
   // TriangularPrism guard
   if (typeof TriPrism !== 'undefined') g_tri = new TriPrism();
   else if (typeof TriangularPrism !== 'undefined') g_tri = new TriangularPrism();
@@ -311,11 +523,19 @@ function main() {
 
   // build map
   g_map = buildMap32();
+  // ---- load texture ----
+ // IMPORTANT: this path must be correct relative to the HTML file's folder.
+  initTexture('mydirt.png', (t) => { g_dirtTex = t; });
+  initTexture('sand1.png',  (t) => { g_sandTex = t; });
 
   // camera (YOUR camera)
   g_camera = new Camera();
   g_camera.setPerspective(60, canvas.width / canvas.height, 0.1, 2000);
   g_camera.updateView();
+  // remember default height and build climbable blocks
+  g_defaultEyeY = g_camera.eye.elements[1];
+  g_smallBlocks = buildSmallBlocks();
+
 
   // UI sliders/buttons
   const rotEl = document.getElementById('globalRot');
@@ -371,6 +591,28 @@ function tick() {
   }
 
   if (g_animate) updateAnimationAngles();
+  // --- gravity back down toward default eye height when not supported ---
+if (g_camera) {
+  const x = g_camera.eye.elements[0];
+  const z = g_camera.eye.elements[2];
+  const y = g_camera.eye.elements[1];
+
+  // If there's no solid underfoot at current height, fall toward default
+  // (check a point slightly below current eye height)
+  const underY = y - 0.45;
+
+  const supported =
+    isSolidAtWorld(x, z, underY) || isSolidAtWorld(x + 0.1, z, underY) || isSolidAtWorld(x - 0.1, z, underY);
+
+  if (!supported && y > g_defaultEyeY) {
+    const ny = Math.max(g_defaultEyeY, y - GRAVITY_DOWN);
+    const dy = ny - y;
+
+    g_camera.eye.elements[1] = ny;
+    g_camera.at.elements[1] += dy;
+    g_camera.updateView();
+  }
+}
 
   renderScene();
   requestAnimationFrame(tick);
@@ -413,6 +655,28 @@ function renderCube(color, M) {
   g_cube.matrix.set(M);
   g_cube.render();
 }
+function renderTexturedCube(M, texture, uvScaleX = 1.0, uvScaleY = 1.0) {
+  if (!texture || a_UV === null || a_UV < 0) {
+    renderCube(WALL_COLOR, M);
+    return;
+  }
+
+  gl.uniform1i(u_UseTexture, 1);
+  gl.uniform2f(u_UVScale, uvScaleX, uvScaleY);
+
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.uniform1i(u_Sampler, 0);
+
+  g_cube.color = [1, 1, 1, 1];
+  g_cube.matrix.set(M);
+  g_cube.render();
+
+  gl.bindTexture(gl.TEXTURE_2D, null);
+  gl.uniform1i(u_UseTexture, 0);
+  gl.uniform2f(u_UVScale, 1.0, 1.0);
+}
+
 
 function renderCylinder(color, M, segments = null) {
   if (segments !== null) g_cyl.segments = segments;
@@ -455,33 +719,53 @@ function drawWorld(world) {
   renderCube(SKY_COLOR, S);
   gl.enable(gl.DEPTH_TEST);
 
-  // floor
-  let F = new Matrix4(world);
-  F.translate(0, FLOOR_Y, 0);
-  F.scale(20, FLOOR_THICK, 20);
-  renderCube(FLOOR_COLOR, F);
+    // floor (match MAP_SIZE x MAP_SIZE)
+    let F = new Matrix4(world);
+    F.translate(0, FLOOR_Y, 0);
+
+    // a little bigger than the map so edges aren't visible
+    const floorSize = MAP_SIZE * CELL_SIZE + 2; // 34 if MAP_SIZE=32
+    F.scale(floorSize, FLOOR_THICK, floorSize);
+
+    // tile factor (bigger number = more repeats, less stretching)
+    const tiles = 16.0;
+    renderTexturedCube(F, g_sandTex, tiles, tiles);
+
 
   // draw walls from voxel map (SOLID collision uses same map)
-  const half = MAP_SIZE / 2;
-  const baseY = FLOOR_TOP_Y + 0.5; // each cube centered at y = floorTop + 0.5
+const half = MAP_SIZE / 2;
+const baseY = FLOOR_TOP_Y + 0.5; // each cube centered at y = floorTop + 0.5
 
-  for (let z = 0; z < MAP_SIZE; z++) {
-    for (let x = 0; x < MAP_SIZE; x++) {
-      const h = g_map[z][x];
-      if (h <= 0) continue;
+// camera position (for distance culling)
+const ex = g_camera.eye.elements[0];
+const ez = g_camera.eye.elements[2];
 
-      for (let y = 0; y < h; y++) {
-        const wx = (x - half) * CELL_SIZE;
-        const wy = baseY + y * 1.0;
-        const wz = (z - half) * CELL_SIZE;
+for (let z = 0; z < MAP_SIZE; z++) {
+  for (let x = 0; x < MAP_SIZE; x++) {
+    const h = g_map[z][x];
+    if (h <= 0) continue;
 
-        // main cube
-        let W = new Matrix4(world);
-        W.translate(wx, wy, wz);
-        W.scale(1.0, 1.0, 1.0);
-        renderCube(WALL_COLOR, W);
+    // world position of this column (x,z)
+    const wx = (x - half) * CELL_SIZE;
+    const wz = (z - half) * CELL_SIZE;
 
-        // tiny outline-ish darker cap (makes walls easier to see)
+    // distance check (skip far columns)
+    const dx = wx - ex;
+    const dz = wz - ez;
+    if (dx * dx + dz * dz > WALL_DRAW_DIST2) continue;
+
+    // draw only the height blocks if close enough
+    for (let y = 0; y < h; y++) {
+      const wy = baseY + y * 1.0;
+
+      // main cube
+      let W = new Matrix4(world);
+      W.translate(wx, wy, wz);
+      W.scale(1.0, 1.0, 1.0);
+      renderTexturedCube(W, g_dirtTex);
+
+      // OPTIONAL: caps are expensive; draw only if pretty close
+      if (dx * dx + dz * dz < 6 * 6) {
         let Cap = new Matrix4(world);
         Cap.translate(wx, wy + 0.51, wz);
         Cap.scale(1.02, 0.05, 1.02);
@@ -489,6 +773,9 @@ function drawWorld(world) {
       }
     }
   }
+}
+
+  
 
   // a few decorative blocks (same as your old)
   const rock = [0.55, 0.55, 0.60, 1];
