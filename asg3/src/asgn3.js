@@ -1,11 +1,5 @@
-// asgn3.js — SOLID WALLS + COLLISION + WATER GUN + DIALOGUE
-// IMPORTANT:
-// 1) Do NOT call main() at the bottom (HTML already does <body onload="main()">)
-// 2) Texture system is supported, but will safely fallback to color if UV/texture not ready
-
 let canvas, gl;
 
-// GLSL locations
 let a_Position;
 let a_UV = null;
 
@@ -16,63 +10,52 @@ let u_Sampler = null;
 let u_UseTexture = null;
 let u_UVScale = null;
 
-// textures
 let g_dirtTex = null;
 let g_sandTex = null;
+let g_skyTex = null;
 
-// UI state
 let g_globalAngle = 0;
 
-// Mouse look
 let g_isDragging = false;
 let g_lastMouseX = 0;
 let g_lastMouseY = 0;
 
-// Poke animation (shift-click) — used by turtle face, safe to keep here
 let g_pokeStart = -1;
 let g_pokeT = 0;
 let g_pokeMode = 0;
 
-// Turtle joints (your turtle uses these globals)
 let g_leg1 = 0;
 let g_leg2 = 0;
 let g_animate = false;
-let g_dialogueMode = "lore"; // "lore" or "win"
+let g_dialogueMode = "lore";
 
-// animation timing
 let g_startTime = performance.now() / 1000;
 let g_seconds = 0;
 let g_fr1 = 0, g_fr2 = 0;
 let g_bl1 = 0, g_bl2 = 0;
 let g_br1 = 0, g_br2 = 0;
 
-// perf HUD
 let g_perfEl = null;
 let g_lastFrameMS = performance.now();
 let g_fpsSMA = 0;
 let g_msSMA = 0;
 
-// rocks HUD
 let g_rocksEl = null;
 
-// reusable shapes
 let g_cube = null;
 let g_cyl = null;
 let g_sph = null;
 let g_hemi = null;
 let g_tri = null;
 
-// camera (YOUR Camera.js)
 let g_camera = null;
 
-// --- climb / small-block stepping ---
-let g_smallBlocks = [];      // list of climbable blocks (AABB)
-let g_defaultEyeY = 0;       // remember camera's normal height
+let g_smallBlocks = [];
+let g_defaultEyeY = 0;
 
 const STEP_MAX = 0.40;
 const GRAVITY_DOWN = 0.03;
 
-// ----------------- VOXEL MAP + WALLS -----------------
 const MAP_SIZE = 32;
 const CELL_SIZE = 1.0;
 
@@ -83,21 +66,16 @@ const FLOOR_TOP_Y = FLOOR_Y + FLOOR_THICK / 2.0;
 const WALL_DRAW_DIST = 6;
 const WALL_DRAW_DIST2 = WALL_DRAW_DIST * WALL_DRAW_DIST;
 
-let g_map = null;   // heights [z][x]
+let g_map = null;
 
-// collision tuning
 const PLAYER_RADIUS = 0.20;
 
-// colors
 const WALL_COLOR   = [0.55, 0.40, 0.22, 1.0];
 const WALL_EDGE    = [0.45, 0.33, 0.18, 1.0];
 const FLOOR_COLOR  = [0.55, 0.85, 0.55, 1.0];
 const SKY_COLOR    = [0.55, 0.75, 1.0, 1.0];
 
-// =======================
-// WATER GUN (projectiles)
-// =======================
-let g_waterShots = [];           // {x,y,z, vx,vy,vz, life}
+let g_waterShots = [];
 let g_isShooting = false;
 let g_lastShotTime = 0;
 
@@ -107,18 +85,14 @@ const WATER_LIFE  = 1.2;
 const WATER_SIZE  = 0.14;
 const WATER_COLOR = [0.25, 0.65, 1.0, 1.0];
 
-// =======================
-// ROCK COUNTER + WIN STATE
-// =======================
 let g_rocksLeft = 0;
-let g_turtleGone = false;     // when true, stop drawing turtle
+let g_turtleGone = false;
 let g_savedShown = false;
 
-// =======================
-// RETRO DIALOGUE (Lore UI)
-// =======================
 let g_dialogueVisible = false;
 let g_dialogueIndex = 0;
+let g_rockTex = null;
+let g_waterTex = null;
 
 const g_dialogueLines = [
   "Hello! Welcome to the world of this homie turtle.",
@@ -135,7 +109,7 @@ function showDialogue(text, mode = "lore") {
   p.innerText = text;
   box.classList.remove("hidden");
   g_dialogueVisible = true;
-  g_dialogueMode = mode;   // ✅ sets "lore" or "win"
+  g_dialogueMode = mode;
 }
 
 function hideDialogue() {
@@ -156,7 +130,7 @@ function toggleDialogue() {
 
 function advanceDialogue() {
   if (!g_dialogueVisible) return;
-  if (g_dialogueMode !== "lore") return; // ✅ never advance win message
+  if (g_dialogueMode !== "lore") return;
 
   g_dialogueIndex++;
   if (g_dialogueIndex >= g_dialogueLines.length) {
@@ -166,19 +140,13 @@ function advanceDialogue() {
   showDialogue(g_dialogueLines[g_dialogueIndex], "lore");
 }
 
-// =======================
-// Shaders
-// =======================
 const VSHADER_SOURCE = `
 attribute vec4 a_Position;
 attribute vec2 a_UV;
-
 uniform mat4 u_ModelMatrix;
 uniform mat4 u_ViewMatrix;
 uniform mat4 u_ProjectionMatrix;
-
 varying vec2 v_UV;
-
 void main() {
   gl_Position = u_ProjectionMatrix * u_ViewMatrix * u_ModelMatrix * a_Position;
   v_UV = a_UV;
@@ -187,14 +155,11 @@ void main() {
 
 const FSHADER_SOURCE = `
 precision mediump float;
-
 uniform vec4 u_FragColor;
 uniform sampler2D u_Sampler;
 uniform int u_UseTexture;
 uniform vec2 u_UVScale;
-
 varying vec2 v_UV;
-
 void main() {
   if (u_UseTexture == 1) {
     gl_FragColor = texture2D(u_Sampler, v_UV * u_UVScale);
@@ -204,9 +169,6 @@ void main() {
 }
 `;
 
-// =======================
-// Map building
-// =======================
 function makeEmptyMap(size) {
   const m = [];
   for (let z = 0; z < size; z++) m.push(new Array(size).fill(0));
@@ -223,13 +185,11 @@ function buildMap32() {
     m[i][MAP_SIZE - 1] = 4;
   }
 
-  // internal walls
   for (let z = 6; z < 26; z++) {
     m[z][10] = 3;
     if (z % 3 === 0) m[z][14] = 2;
   }
 
-  // small room
   for (let x = 18; x < 28; x++) {
     m[8][x] = 3;
     m[16][x] = 3;
@@ -238,14 +198,11 @@ function buildMap32() {
     m[z][18] = 3;
     m[z][27] = 3;
   }
-  m[12][18] = 0; // door
+  m[12][18] = 0;
 
   return m;
 }
 
-// =======================
-// Collision helpers
-// =======================
 function getForwardXZ() {
   const f = new Vector3(g_camera.at.elements);
   f.sub(g_camera.eye);
@@ -270,7 +227,6 @@ function worldToMap(x, z) {
 }
 
 function isSolidAtWorld(x, z, y) {
-  // walls (voxel map)
   {
     const [mx, mz] = worldToMap(x, z);
     if (mx < 0 || mz < 0 || mx >= MAP_SIZE || mz >= MAP_SIZE) return true;
@@ -283,7 +239,6 @@ function isSolidAtWorld(x, z, y) {
     }
   }
 
-  // small climbable blocks (gray)
   for (let i = 0; i < g_smallBlocks.length; i++) {
     const b = g_smallBlocks[i];
     if (x >= b.x - b.halfX && x <= b.x + b.halfX &&
@@ -311,7 +266,6 @@ function tryMove(dx, dz) {
   const nz = g_camera.eye.elements[2] + dz;
   const ey = g_camera.eye.elements[1];
 
-  // normal move
   if (canStandAt(nx, nz, ey)) {
     g_camera.eye.elements[0] = nx;
     g_camera.eye.elements[2] = nz;
@@ -321,7 +275,6 @@ function tryMove(dx, dz) {
     return;
   }
 
-  // step-up attempt
   const stepY = ey + STEP_MAX;
   if (canStandAt(nx, nz, stepY)) {
     g_camera.eye.elements[0] = nx;
@@ -358,19 +311,14 @@ function moveRight() {
   tryMove(r.elements[0] * step, r.elements[2] * step);
 }
 
-// =======================
-// Controls
-// =======================
 function addMouseControls() {
   canvas.addEventListener('mousedown', (ev) => {
-    // CTRL + click = shoot
     if (ev.ctrlKey) {
       g_isShooting = true;
       g_isDragging = false;
       return;
     }
 
-    // shift-click = poke mode toggle (turtle face)
     if (ev.shiftKey) {
       g_pokeMode = (g_pokeMode + 1) % 2;
       g_pokeStart = performance.now() / 1000;
@@ -410,13 +358,11 @@ function addKeyboardControls() {
   document.addEventListener('keydown', (ev) => {
     const k = ev.key.toLowerCase();
 
-    // lore keys always work
     if (k === 'l') {
       toggleDialogue();
       return;
     }
 
-    // ✅ SPACE: lore advances, win closes
     if (ev.code === 'Space' && g_dialogueVisible) {
       ev.preventDefault();
       if (g_dialogueMode === "win") hideDialogue();
@@ -481,9 +427,6 @@ function buildSmallBlocks() {
   return blocks;
 }
 
-// =======================
-// Texture helpers
-// =======================
 function isPowerOf2(v) { return (v & (v - 1)) === 0; }
 
 function initTexture(imgSrc, onReady) {
@@ -518,9 +461,6 @@ function initTexture(imgSrc, onReady) {
   img.src = imgSrc + "?v=" + Date.now();
 }
 
-// =======================
-// Water gun logic
-// =======================
 function spawnWaterShot() {
   if (!g_camera) return;
 
@@ -590,7 +530,6 @@ function updateWaterShots(dt) {
         g_savedShown = true;
         g_turtleGone = true;
 
-        // ✅ IMPORTANT: set mode to "win"
         showDialogue(
           "Congratulations! You've rescued the turtle! Feel free to stay in this world longer or leave.",
           "win"
@@ -599,24 +538,19 @@ function updateWaterShots(dt) {
     }
   }
 }
-
 function drawWaterShots(world) {
   for (let i = 0; i < g_waterShots.length; i++) {
     const s = g_waterShots[i];
     let M = new Matrix4(world);
     M.translate(s.x, s.y, s.z);
     M.scale(WATER_SIZE, WATER_SIZE, WATER_SIZE);
-    renderCube(WATER_COLOR, M);
+
+    renderTexturedCube(M, g_waterTex, 1.0, 1.0);
   }
 }
 
-// =======================
-// Main / Tick / Rendering
-// =======================
 function main() {
   canvas = document.getElementById('webgl');
-
-  // ✅ FPS: do NOT preserve drawing buffer unless you need screenshots
   gl = canvas.getContext('webgl');
   if (!gl) return;
 
@@ -638,13 +572,11 @@ function main() {
   if (u_UseTexture) gl.uniform1i(u_UseTexture, 0);
   if (u_UVScale) gl.uniform2f(u_UVScale, 1.0, 1.0);
 
-  // ✅ SPEED: sky = clearColor (no sky cube draw)
   gl.clearColor(SKY_COLOR[0], SKY_COLOR[1], SKY_COLOR[2], 1.0);
 
   g_perfEl = document.getElementById('perf');
   g_rocksEl = document.getElementById('rocksHUD');
 
-  // shapes
   g_cube = new Cube();
   g_cyl = new Cylinder();
   g_sph = new Sphere();
@@ -654,32 +586,27 @@ function main() {
   else if (typeof TriangularPrism !== 'undefined') g_tri = new TriangularPrism();
   else console.error('Tri prism class not found (TriPrism or TriangularPrism).');
 
-  // map + blocks
   g_map = buildMap32();
   g_smallBlocks = buildSmallBlocks();
   g_rocksLeft = g_smallBlocks.length;
   g_turtleGone = false;
   g_savedShown = false;
 
-  // textures
   initTexture('mydirt.png', (t) => { g_dirtTex = t; });
   initTexture('sand1.png',  (t) => { g_sandTex = t; });
+  initTexture('sky4.png',    (t) => { g_skyTex  = t; });
+  initTexture('rock.png', (t) => { g_rockTex = t; });
+  initTexture('water.png', (t) => { g_waterTex = t; });
 
-  // camera
   g_camera = new Camera();
-
-  // ✅ Walls feel taller: smaller FOV
   g_camera.setPerspective(50, canvas.width / canvas.height, 0.1, 2000);
 
-  // ✅ If Camera.js wasn't updated or you want extra effect:
-  // Lower eye/at a tiny bit (visual only)
   g_camera.eye.elements[1] -= 0.10;
   g_camera.at.elements[1]  -= 0.10;
 
   g_camera.updateView();
   g_defaultEyeY = g_camera.eye.elements[1];
 
-  // UI
   const rotEl = document.getElementById('globalRot');
   if (rotEl) rotEl.oninput = (e) => (g_globalAngle = +e.target.value);
 
@@ -709,7 +636,6 @@ function tick() {
 
   updateWaterShots(dt);
 
-  // perf smoothing
   const fps = 1000.0 / Math.max(dtMS, 0.0001);
   const alpha = 0.08;
   g_fpsSMA = (g_fpsSMA === 0) ? fps : (g_fpsSMA * (1 - alpha) + fps * alpha);
@@ -727,7 +653,6 @@ function tick() {
 
   g_seconds = nowMS / 1000 - g_startTime;
 
-  // poke timing (turtle face)
   if (g_pokeStart >= 0) {
     const t = (nowMS / 1000 - g_pokeStart) / 1.2;
     g_pokeT = Math.min(Math.max(t, 0), 1);
@@ -738,7 +663,6 @@ function tick() {
 
   if (g_animate) updateAnimationAngles();
 
-  // gravity back down toward default eye height when not supported
   if (g_camera) {
     const x = g_camera.eye.elements[0];
     const z = g_camera.eye.elements[2];
@@ -786,18 +710,16 @@ function renderScene() {
   world.rotate(g_globalAngle, 0, 1, 0);
 
   drawWorld(world);
- if (!g_turtleGone){
+
+  if (!g_turtleGone) {
     const turtleWorld = new Matrix4(world);
     turtleWorld.translate(0, 0.18, 0);
     turtleWorld.scale(0.35, 0.35, 0.35);
     turtleWorld.translate(-0.10, -0.05, 0);
     drawTurtle(turtleWorld);
- }
+  }
 }
 
-// =======================
-// Render helpers
-// =======================
 function renderCube(color, M) {
   if (u_UseTexture) gl.uniform1i(u_UseTexture, 0);
   if (u_UVScale) gl.uniform2f(u_UVScale, 1.0, 1.0);
@@ -828,6 +750,7 @@ function renderTexturedCube(M, texture, uvScaleX = 1.0, uvScaleY = 1.0) {
   gl.uniform1i(u_UseTexture, 0);
   gl.uniform2f(u_UVScale, 1.0, 1.0);
 }
+
 function renderCylinder(color, M, segments = null) {
   if (segments !== null) g_cyl.segments = segments;
   g_cyl.color = color;
@@ -859,14 +782,17 @@ function renderTriPrism(color, M) {
   g_tri.render();
 }
 
-
-// =======================
-// World drawing
-// =======================
 function drawWorld(world) {
-  // ✅ NO SKY CUBE DRAW (you already clearColor in renderScene)
+  gl.disable(gl.DEPTH_TEST);
 
-  // FLOOR
+  let S = new Matrix4(world);
+  S.translate(g_camera.eye.elements[0], 0, g_camera.eye.elements[2]);
+  S.scale(80, 80, 80);
+  if (g_skyTex) renderTexturedCube(S, g_skyTex, 1.0, 1.0);
+  else renderCube(SKY_COLOR, S);
+
+  gl.enable(gl.DEPTH_TEST);
+
   let F = new Matrix4(world);
   F.translate(0, FLOOR_Y, 0);
   const floorSize = MAP_SIZE * CELL_SIZE + 2;
@@ -875,7 +801,6 @@ function drawWorld(world) {
   const tiles = 16.0;
   renderTexturedCube(F, g_sandTex, tiles, tiles);
 
-  // WALLS from voxel map (unchanged)
   const half = MAP_SIZE / 2;
   const baseY = FLOOR_TOP_Y + 0.5;
 
@@ -912,22 +837,22 @@ function drawWorld(world) {
     }
   }
 
-  // ROCKS (gray)
   const rock = [0.55, 0.55, 0.60, 1];
+  // 3) replace ONLY the ROCKS loop in drawWorld(world) with this:
   for (let i = 0; i < g_smallBlocks.length; i++) {
-    const b = g_smallBlocks[i];
-    const cy = (b.bottomY + b.topY) * 0.5;
+        const b = g_smallBlocks[i];
+        const cy = (b.bottomY + b.topY) * 0.5;
 
-    let B = new Matrix4(world);
-    B.translate(b.x, cy, b.z);
-    B.scale(b.halfX * 2.0, (b.topY - b.bottomY), b.halfZ * 2.0);
-    renderCube(rock, B);
+        let B = new Matrix4(world);
+        B.translate(b.x, cy, b.z);
+        B.scale(b.halfX * 2.0, (b.topY - b.bottomY), b.halfZ * 2.0);
+
+        renderTexturedCube(B, g_rockTex, 1.0, 1.0);
   }
 
-  // WATER SHOTS
+
   drawWaterShots(world);
 
-  // Goal block (optional)
   const goal = [1.0, 0.85, 0.25, 1];
   let G = new Matrix4(world);
   G.translate(3, -0.25, -3);
@@ -935,7 +860,6 @@ function drawWorld(world) {
   renderCube(goal, G);
 }
 
-// ---- (stopping before Turtle code, per your request) ----
 
 // =======================
 // TURTLE CODE (yours)
