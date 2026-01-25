@@ -93,6 +93,8 @@ let g_dialogueVisible = false;
 let g_dialogueIndex = 0;
 let g_rockTex = null;
 let g_waterTex = null;
+let g_smileUntil = 0;        // seconds (in g_seconds time)
+const SMILE_SECS = 0.8;      // how long to smile after rock removed
 
 const g_dialogueLines = [
   "Hello! Welcome to the world of this homie turtle.",
@@ -319,12 +321,12 @@ function addMouseControls() {
       return;
     }
 
-    if (ev.shiftKey) {
-      g_pokeMode = (g_pokeMode + 1) % 2;
-      g_pokeStart = performance.now() / 1000;
-      g_isDragging = false;
-      return;
-    }
+    // if (ev.shiftKey) {
+    //   g_pokeMode = (g_pokeMode + 1) % 2;
+    //   g_pokeStart = performance.now() / 1000;
+    //   g_isDragging = false;
+    //   return;
+    // }
 
     g_isDragging = true;
     g_lastMouseX = ev.clientX;
@@ -524,6 +526,7 @@ function updateWaterShots(dt) {
     if (hitIndex !== -1) {
       g_smallBlocks.splice(hitIndex, 1);
       g_rocksLeft = g_smallBlocks.length;
+      g_smileUntil = g_seconds + SMILE_SECS;
       g_waterShots.splice(i, 1);
 
       if (!g_savedShown && g_rocksLeft === 0) {
@@ -652,6 +655,9 @@ function tick() {
   }
 
   g_seconds = nowMS / 1000 - g_startTime;
+  // --- AUTO FACE MODE ---
+  // cry by default, smile briefly after a rock gets removed
+  g_pokeMode = (g_seconds < g_smileUntil) ? 1 : 0;
 
   if (g_pokeStart >= 0) {
     const t = (nowMS / 1000 - g_pokeStart) / 1.2;
@@ -713,9 +719,9 @@ function renderScene() {
 
   if (!g_turtleGone) {
     const turtleWorld = new Matrix4(world);
-    turtleWorld.translate(0, 0.18, 0);
+    turtleWorld.translate(0, -0.06, 0);
     turtleWorld.scale(0.35, 0.35, 0.35);
-    turtleWorld.translate(-0.10, -0.05, 0);
+    turtleWorld.translate(-0.15, -0.05, 0);
     drawTurtle(turtleWorld);
   }
 }
@@ -1089,7 +1095,8 @@ function drawRealHead(world, bodyGreen) {
 
   const faceZ = headSZ * 0.5 + 0.06;
 
-  const poking = (g_pokeStart >= 0);
+  const poking = true;
+  
   const t = g_pokeT;
   const ease = (t < 0.5) ? (2 * t * t) : (1 - Math.pow(-2 * t + 2, 2) / 2);
   const tearY = 0.05 - 0.40 * ease;
@@ -1100,17 +1107,6 @@ function drawRealHead(world, bodyGreen) {
   function drawNostrils() {
     faceCube(nostrilC, -0.05, 0.02, faceZ + 0.01, 0.035, 0.035, 0.02);
     faceCube(nostrilC, 0.05, 0.02, faceZ + 0.01, 0.035, 0.035, 0.02);
-  }
-
-  if (!poking) {
-    faceCube(eyeW, -0.16, 0.12, faceZ, 0.12, 0.12, 0.05);
-    faceCube(eyeB, -0.14, 0.12, faceZ + 0.02, 0.05, 0.05, 0.04);
-
-    faceCube(eyeW, 0.18, 0.12, faceZ, 0.12, 0.12, 0.05);
-    faceCube(eyeB, 0.18, 0.12, faceZ + 0.02, 0.05, 0.05, 0.04);
-
-    faceCube(mouth, 0.02, -0.12, faceZ + 0.01, 0.18, 0.035, 0.03);
-    return;
   }
 
   if (g_pokeMode === 0) {
