@@ -156,14 +156,6 @@ function advanceDialogue() {
   }
   showDialogue(g_dialogueLines[g_dialogueIndex], "lore");
 }
-
-// =====================================================
-// SAVE / LOAD / CLEAR (MANUAL ONLY, NO AUTO LOAD/SAVE)
-// Keys: P = Save, O = Load, S = Clear Save
-// NOTE: Since S used to be moveBack, we move "back" to X.
-// ArrowDown still moves back.
-// =====================================================
-
 const SAVE_KEY = "turtle_world_save_v1";
 
 function showToast(msg, secs = 0.9) {
