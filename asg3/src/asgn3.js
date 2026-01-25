@@ -95,6 +95,8 @@ let g_rockTex = null;
 let g_waterTex = null;
 let g_smileUntil = 0;        // seconds (in g_seconds time)
 const SMILE_SECS = 0.8;      // how long to smile after rock removed
+const WATER_UP = 2.2;          // initial upward speed
+const WATER_GRAVITY = -9.0;    // gravity (negative = down). tweak -6 to -12
 
 const g_dialogueLines = [
   "Hello! Welcome to the world of this homie turtle.",
@@ -466,23 +468,27 @@ function initTexture(imgSrc, onReady) {
 function spawnWaterShot() {
   if (!g_camera) return;
 
+  // forward direction (xz only, already normalized)
   const f = getForwardXZ();
   const ex = g_camera.eye.elements[0];
   const ez = g_camera.eye.elements[2];
 
-  const y = -0.20;
-
+  // spawn a bit in front of player
   const sx = ex + f.elements[0] * 0.55;
   const sz = ez + f.elements[2] * 0.55;
 
+  // start height (raise a bit so it feels like it's coming from camera)
+  const sy = g_camera.eye.elements[1] - 0.15;
+
   g_waterShots.push({
-    x: sx, y: y, z: sz,
+    x: sx, y: sy, z: sz,
     vx: f.elements[0] * WATER_SPEED,
-    vy: 0.0,
+    vy: WATER_UP,                 // <-- key change
     vz: f.elements[2] * WATER_SPEED,
     life: WATER_LIFE
   });
 }
+
 
 function pointHitsBlock(px, py, pz, b) {
   return (
@@ -505,10 +511,17 @@ function updateWaterShots(dt) {
 
   for (let i = g_waterShots.length - 1; i >= 0; i--) {
     const s = g_waterShots[i];
+
+    // gravity
+    s.vy += WATER_GRAVITY * dt;
+
+    // integrate
     s.x += s.vx * dt;
     s.y += s.vy * dt;
     s.z += s.vz * dt;
+
     s.life -= dt;
+
 
     if (s.life <= 0) {
       g_waterShots.splice(i, 1);
@@ -538,6 +551,11 @@ function updateWaterShots(dt) {
           "win"
         );
       }
+      if (s.y <= FLOOR_TOP_Y + 0.02) {
+        g_waterShots.splice(i, 1);
+        continue;
+      }
+
     }
   }
 }
