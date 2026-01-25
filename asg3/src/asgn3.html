@@ -5,54 +5,47 @@
   <title>Asgn3 - Turtle World</title>
 
   <style>
-    .canvasWrap{
-  position: relative;
-  width: 600px;
-  height: 600px;
-}
+    /* Wrapper so dialogue can overlay the canvas */
+    #canvasWrap{
+      position: relative;
+      width: 600px;
+      height: 600px;
+    }
 
-#webgl{
-  display:block;
-  border: 1px solid #000;
-}
+    /* Make canvas focusable so key events behave nicely */
+    #webgl{
+      display: block;
+      border: 1px solid #000;
+      outline: none;
+    }
 
-/* Retro Dialogue Bubble (overlay INSIDE canvas) */
-.dialogue{
-  position: absolute;
-  left: 50%;
-  bottom: 18px;              /* inside canvas, slightly above bottom */
-  transform: translateX(-50%);
-  width: 560px;              /* fits in 600 canvas */
-  max-width: calc(100% - 24px);
+    /* Retro Dialogue Bubble (overlay INSIDE canvas) */
+    .dialogue{
+      position: absolute;
+      left: 50%;
+      bottom: 18px;                 /* inside canvas, slightly above bottom */
+      transform: translateX(-50%);
+      width: 560px;
+      max-width: calc(100% - 24px);
 
-  background: #fff;
-  color: #000;
+      background: #fff;
+      color: #000;
 
-  padding: 12px 16px 10px;
-  font-family: "Courier New", monospace;
-  font-size: 16px;
-  line-height: 1.35;
+      padding: 12px 16px 10px;
+      font-family: "Courier New", monospace;
+      font-size: 16px;
+      line-height: 1.35;
 
-  border: 4px solid #000;
-  box-shadow: 4px 4px 0 #000;
+      border: 4px solid #000;
+      box-shadow: 4px 4px 0 #000;
 
-  z-index: 9999;
-  pointer-events: none;      /* IMPORTANT: bubble won’t steal clicks */
-}
+      z-index: 9999;
+      pointer-events: none;      /* IMPORTANT: bubble won’t steal clicks */
+      user-select: none;
+    }
 
-.dialogue p{
-  margin: 0;
-}
-
-.dialogueHint{
-  margin-top: 6px;
-  font-size: 12px;
-  opacity: 0.7;
-}
-
-.hidden{ display:none; }
-
-
+    .dialogue p{ margin: 0; }
+    .hidden{ display:none; }
   </style>
 </head>
 
@@ -68,6 +61,7 @@
   <p><strong>Notes to Grader:</strong>
     Turtle is the main character in a small world. Use WASD / Arrow keys to move,
     Q/E to pan, and mouse drag to look around.
+    Press L for lore. Use CTRL + hold mouse to shoot water and remove rocks.
   </p>
 
   <div id="perf"
@@ -76,16 +70,20 @@
     FPS: --<br>ms: --
   </div>
 
-  <!-- Canvas + Dialogue Wrapper -->
-<div id="canvasWrap" style="position: relative; width: 600px; height: 600px;">
-  <canvas id="webgl" width="600" height="600" style="border:1px solid #000"></canvas>
-
-  <!-- Retro Dialogue Bubble (now inside canvas) -->
-  <div id="dialogueBox" class="dialogue hidden">
-    <p id="dialogueText">Press L to read the turtle lore...</p>
+  <div id="rocksHUD"
+       style="position:fixed; top:10px; left:10px; background:#0008; color:#fff;
+              padding:8px 10px; font:12px monospace; border-radius:8px; z-index:9999;">
+    Rocks left: --
   </div>
-</div>
 
+  <div id="canvasWrap">
+    <!-- tabindex makes canvas focusable -->
+    <canvas id="webgl" width="600" height="600" tabindex="0"></canvas>
+
+    <div id="dialogueBox" class="dialogue hidden">
+      <p id="dialogueText">Press L to read the turtle lore...</p>
+    </div>
+  </div>
 
   <p>
     Global Rotation (still here if you want it)
@@ -116,7 +114,6 @@
   <script src="../lib/cuon-utils.js"></script>
   <script src="../lib/cuon-matrix-cse160.js"></script>
 
-  <!-- NEW camera -->
   <script src="Camera.js"></script>
   <script src="Triangle.js"></script>
   <script src="Cube.js"></script>
@@ -125,7 +122,6 @@
   <script src="TriangularPrism.js"></script>
   <script src="Sphere.js"></script>
 
-  <!-- main -->
   <script src="asgn3.js"></script>
 </body>
 </html>
