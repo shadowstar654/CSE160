@@ -506,8 +506,8 @@ function addKeyboardControls() {
     else if (k === 's') moveBack();
     else if (k === 'a') moveLeft();
     else if (k === 'd') moveRight();
-    else if (k === 'q') g_camera.panLeft();
-    else if (k === 'e') g_camera.panRight();
+    else if (k === 'q') g_camera.panRight();
+    else if (k === 'e') g_camera.panLeft();
 
     else if (ev.key === 'ArrowUp') moveForward();
     else if (ev.key === 'ArrowDown') moveBack();
