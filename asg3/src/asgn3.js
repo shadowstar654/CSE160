@@ -174,7 +174,7 @@ function main() {
 
   // camera (YOUR camera)
   g_camera = new Camera();
-  g_camera.setPerspective(60, canvas.width / canvas.height, 0.1, 200);
+  g_camera.setPerspective(60, canvas.width / canvas.height, 0.1, 2000);
   g_camera.updateView();
 
   // UI sliders/buttons
@@ -311,6 +311,15 @@ function renderTriPrism(color, M) {
 
 // ---------- simple world ----------
 function drawWorld(world) {
+    // SKY FIRST
+  gl.disable(gl.DEPTH_TEST);
+  const skyC = [0.55, 0.75, 1.0, 1.0];
+  let S = new Matrix4(world);
+  S.scale(1000, 1000, 1000);
+  S.scale(-1, 1, 1);
+  renderCube(skyC, S);
+  gl.enable(gl.DEPTH_TEST);
+
   // floor
   const floorC = [0.55, 0.85, 0.55, 1];
   let M = new Matrix4(world);
@@ -336,8 +345,6 @@ function drawWorld(world) {
   M.scale(0.8, 0.8, 0.8);
   renderCube(goal, M);
 }
-
-
 
 // ------------------- YOUR TURTLE CODE BELOW -------------------
 // (Everything below here is your turtle code unchanged)
