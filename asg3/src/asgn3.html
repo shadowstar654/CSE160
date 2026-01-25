@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Asgn3 - Turtle World</title>
+</head>
+
+<body onload="main()">
+  <p><strong>Student Name:</strong> Angela Yu</p>
+  <p><strong>Email:</strong> annyu@ucsc.edu</p>
+  <p><strong>Github:</strong>
+    <a href="https://github.com/shadowstar654/CSE160/tree/main/asg3" target="_blank">
+      https://github.com/shadowstar654/CSE160/tree/main/asg3
+    </a>
+  </p>
+
+  <p><strong>Notes to Grader:</strong>
+    Turtle is the main character in a small world. Use WASD / Arrow keys to move,
+    Q/E to pan, and mouse drag to look around.
+  </p>
+
+  <div id="perf"
+       style="position:fixed; top:10px; right:10px; background:#0008; color:#fff;
+              padding:8px 10px; font:12px monospace; border-radius:8px; z-index:9999;">
+    FPS: --<br>ms: --
+  </div>
+
+  <canvas id="webgl" width="600" height="600" style="border:1px solid #000"></canvas>
+
+  <p>
+    Global Rotation (still here if you want it)
+    <input type="range" id="globalRot" min="0" max="360" value="0">
+  </p>
+
+  <p>
+    Front-Left Leg Joint 1 (thigh)
+    <input type="range" id="leg1" min="-60" max="60" value="0">
+  </p>
+
+  <p>
+    Front-Left Leg Joint 2 (calf)
+    <input type="range" id="leg2" min="-60" max="60" value="0">
+  </p>
+
+  <p>
+    <button id="animOn">Start Animation</button>
+    <button id="animOff">Stop Animation</button>
+  </p>
+
+  <p>
+    Controls: WASD / Arrow keys = move, Q/E = pan, Mouse drag = look
+  </p>
+
+  <script src="../lib/webgl-utils.js"></script>
+  <script src="../lib/webgl-debug.js"></script>
+  <script src="../lib/cuon-utils.js"></script>
+  <script src="../lib/cuon-matrix-cse160.js"></script>
+
+  <!-- NEW camera -->
+  <script src="Camera.js"></script>
+
+  <!-- your existing shapes -->
+  <script src="Cube.js"></script>
+  <script src="Cylinder.js"></script>
+  <script src="Hemisphere.js"></script>
+  <script src="TriangularPrism.js"></script>
+  <script src="Sphere.js"></script>
+
+  <!-- main -->
+  <script src="asgn3.js"></script>
+</body>
+</html>
