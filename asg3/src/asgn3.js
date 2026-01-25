@@ -243,10 +243,10 @@ function saveGame() {
     if (!g_camera) return;
     const s = getGameState();
     localStorage.setItem(SAVE_KEY, JSON.stringify(s));
-    showToast("Saved ✅");
+    showToast("Saved");
   } catch (e) {
     console.warn("[SAVE] failed", e);
-    showToast("Save failed ❌");
+    showToast("Save failed");
   }
 }
 
@@ -254,16 +254,16 @@ function loadGame() {
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) {
-      showToast("No save found ❌");
+      showToast("No save found");
       return false;
     }
     const s = JSON.parse(raw);
     applyGameState(s);
-    showToast("Loaded ✅");
+    showToast("Loaded From previous save");
     return true;
   } catch (e) {
     console.warn("[LOAD] failed", e);
-    showToast("Load failed ❌");
+    showToast("Load failed");
     return false;
   }
 }
@@ -271,10 +271,10 @@ function loadGame() {
 function clearSave() {
   try {
     localStorage.removeItem(SAVE_KEY);
-    showToast("Cleared save 🗑️");
+    showToast("Cleared save");
   } catch (e) {
     console.warn("[CLEAR] failed", e);
-    showToast("Clear failed ❌");
+    showToast("Clear failed");
   }
 }
 
@@ -518,7 +518,7 @@ function addKeyboardControls() {
     else if (k === 'e') g_camera.panRight();
 
     else if (ev.key === 'ArrowUp') moveForward();
-    else if (ev.key === 'ArrowDown') moveBack();  // still works
+    else if (ev.key === 'ArrowDown') moveBack();
     else if (ev.key === 'ArrowLeft') moveLeft();
     else if (ev.key === 'ArrowRight') moveRight();
   });
@@ -1010,12 +1010,7 @@ function drawWorld(world) {
   G.scale(0.8, 0.8, 0.8);
   renderCube(goal, G);
 }
-
-
-
-// =======================
-// TURTLE CODE (yours)
-// =======================
+//My previous turtle code
 
 function drawScutePads(world) {
   const padC = [0.36, 0.26, 0.12, 1.0];
