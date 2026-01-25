@@ -212,13 +212,13 @@ function makeEmptyMap(size) {
 function buildMap32() {
   const m = makeEmptyMap(MAP_SIZE);
 
-  // border walls height 4
   for (let i = 0; i < MAP_SIZE; i++) {
     m[0][i] = 4;
     m[MAP_SIZE - 1][i] = 4;
     m[i][0] = 4;
-    m[i][MAP_SIZE - 1][i] = 4;
+    m[i][MAP_SIZE - 1] = 4;   // ✅ FIXED
   }
+
 
   // internal walls
   for (let z = 6; z < 26; z++) {
