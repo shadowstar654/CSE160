@@ -5,7 +5,7 @@
   <title>Asgn3 - Turtle World</title>
 
   <style>
-    /* Wrapper so dialogue can overlay the canvas */
+    /* Wrapper so overlays can sit ON TOP of the canvas */
     #canvasWrap{
       position: relative;
       width: 600px;
@@ -17,6 +17,23 @@
       display: block;
       border: 1px solid #000;
       outline: none;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Rocks HUD (overlay top-left INSIDE canvas) */
+    #rocksHUD{
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.55);
+      color: #fff;
+      padding: 8px 10px;
+      font: 12px monospace;
+      border-radius: 8px;
+      z-index: 99999;
+      pointer-events: none;
+      user-select: none;
     }
 
     /* Retro Dialogue Bubble (overlay INSIDE canvas) */
@@ -64,21 +81,19 @@
     Press L for lore. Use CTRL + hold mouse to shoot water and remove rocks.
   </p>
 
+  <!-- Perf HUD stays fixed to screen (top-right) -->
   <div id="perf"
        style="position:fixed; top:10px; right:10px; background:#0008; color:#fff;
               padding:8px 10px; font:12px monospace; border-radius:8px; z-index:9999;">
     FPS: --<br>ms: --
   </div>
 
-  <div id="rocksHUD"
-       style="position:fixed; top:10px; left:10px; background:#0008; color:#fff;
-              padding:8px 10px; font:12px monospace; border-radius:8px; z-index:9999;">
-    Rocks left: --
-  </div>
-
   <div id="canvasWrap">
     <!-- tabindex makes canvas focusable -->
     <canvas id="webgl" width="600" height="600" tabindex="0"></canvas>
+
+    <!-- Rocks HUD now overlays the canvas -->
+    <div id="rocksHUD">Rocks left: --</div>
 
     <div id="dialogueBox" class="dialogue hidden">
       <p id="dialogueText">Press L to read the turtle lore...</p>
