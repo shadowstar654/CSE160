@@ -1,7 +1,8 @@
 class Camera {
   constructor() {
-    this.eye = new Vector3([0, 0.2, 3.5]);
-    this.at  = new Vector3([0, 0.1, 0]);
+    // Slightly lower eye/at so walls feel taller (visual, not wall changes)
+    this.eye = new Vector3([0, 0.10, 3.5]);
+    this.at  = new Vector3([0, 0.00, 0]);
     this.up  = new Vector3([0, 1, 0]);
 
     this.viewMat = new Matrix4();
@@ -10,8 +11,8 @@ class Camera {
     this.moveStep = 0.18;
     this.panStepDeg = 4;
 
-    // initial projection (60 deg fov)
-    this.setPerspective(60, 1.0, 0.1, 100.0);
+    // Slightly lower FOV than 60 makes things feel less tiny / more “tall”
+    this.setPerspective(50, 1.0, 0.1, 100.0);
     this.updateView();
   }
 
@@ -76,18 +77,11 @@ class Camera {
   }
 
   // pan around eye
-  panLeft(deg = this.panStepDeg) {
-    this._pan(deg);
-  }
-
-  panRight(deg = this.panStepDeg) {
-    this._pan(-deg);
-  }
+  panLeft(deg = this.panStepDeg) { this._pan(deg); }
+  panRight(deg = this.panStepDeg) { this._pan(-deg); }
 
   // Mouse pan: bigger deg based on dx
-  panMouse(dxDeg) {
-    this._pan(dxDeg);
-  }
+  panMouse(dxDeg) { this._pan(dxDeg); }
 
   _pan(deg) {
     const rad = deg * Math.PI / 180.0;

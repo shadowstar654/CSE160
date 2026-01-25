@@ -37,6 +37,7 @@ let g_pokeMode = 0;
 let g_leg1 = 0;
 let g_leg2 = 0;
 let g_animate = false;
+let g_dialogueMode = "lore"; // "lore" or "win"
 
 // animation timing
 let g_startTime = performance.now() / 1000;
@@ -79,7 +80,7 @@ const FLOOR_Y = -0.35;
 const FLOOR_THICK = 0.02;
 const FLOOR_TOP_Y = FLOOR_Y + FLOOR_THICK / 2.0;
 
-const WALL_DRAW_DIST = 10;
+const WALL_DRAW_DIST = 6;
 const WALL_DRAW_DIST2 = WALL_DRAW_DIST * WALL_DRAW_DIST;
 
 let g_map = null;   // heights [z][x]
@@ -127,13 +128,14 @@ const g_dialogueLines = [
   "Press SPACE to continue..."
 ];
 
-function showDialogue(text) {
+function showDialogue(text, mode = "lore") {
   const box = document.getElementById("dialogueBox");
   const p = document.getElementById("dialogueText");
   if (!box || !p) return;
   p.innerText = text;
   box.classList.remove("hidden");
   g_dialogueVisible = true;
+  g_dialogueMode = mode;   // ✅ sets "lore" or "win"
 }
 
 function hideDialogue() {
@@ -148,18 +150,20 @@ function toggleDialogue() {
     hideDialogue();
   } else {
     g_dialogueIndex = 0;
-    showDialogue(g_dialogueLines[g_dialogueIndex]);
+    showDialogue(g_dialogueLines[g_dialogueIndex], "lore");
   }
 }
 
 function advanceDialogue() {
   if (!g_dialogueVisible) return;
+  if (g_dialogueMode !== "lore") return; // ✅ never advance win message
+
   g_dialogueIndex++;
   if (g_dialogueIndex >= g_dialogueLines.length) {
     hideDialogue();
     return;
   }
-  showDialogue(g_dialogueLines[g_dialogueIndex]);
+  showDialogue(g_dialogueLines[g_dialogueIndex], "lore");
 }
 
 // =======================
@@ -216,9 +220,8 @@ function buildMap32() {
     m[0][i] = 4;
     m[MAP_SIZE - 1][i] = 4;
     m[i][0] = 4;
-    m[i][MAP_SIZE - 1] = 4;   // ✅ FIXED
+    m[i][MAP_SIZE - 1] = 4;
   }
-
 
   // internal walls
   for (let z = 6; z < 26; z++) {
@@ -412,9 +415,12 @@ function addKeyboardControls() {
       toggleDialogue();
       return;
     }
+
+    // ✅ SPACE: lore advances, win closes
     if (ev.code === 'Space' && g_dialogueVisible) {
       ev.preventDefault();
-      advanceDialogue();
+      if (g_dialogueMode === "win") hideDialogue();
+      else advanceDialogue();
       return;
     }
 
@@ -433,11 +439,12 @@ function addKeyboardControls() {
     else if (ev.key === 'ArrowRight') moveRight();
   });
 }
+
 function cellIsWallAtWorld(x, z) {
-  if (!g_map) return false; // safety (in case called too early)
+  if (!g_map) return false;
   const [mx, mz] = worldToMap(x, z);
-  if (mx < 0 || mz < 0 || mx >= MAP_SIZE || mz >= MAP_SIZE) return true; // outside = blocked
-  return g_map[mz][mx] > 0; // any height means there's a wall column there
+  if (mx < 0 || mz < 0 || mx >= MAP_SIZE || mz >= MAP_SIZE) return true;
+  return g_map[mz][mx] > 0;
 }
 
 function buildSmallBlocks() {
@@ -446,20 +453,17 @@ function buildSmallBlocks() {
   const bottomY = centerY - half;
   const topY = centerY + half;
 
-  const WANT = 10; // ✅ your “2 less rocks”
+  const WANT = 10;
   const blocks = [];
 
-  // candidate positions (same style as before)
-  // we’ll keep scanning forward until we collect WANT safe spots
   let i = 0;
   let attempts = 0;
-  const MAX_ATTEMPTS = 200; // safety so we never infinite-loop
+  const MAX_ATTEMPTS = 200;
 
   while (blocks.length < WANT && attempts < MAX_ATTEMPTS) {
     const x = -3 + (i % 6);
     const z = -2 + Math.floor(i / 6);
 
-    // don’t place inside walls
     if (!cellIsWallAtWorld(x, z)) {
       blocks.push({
         x, z,
@@ -476,7 +480,6 @@ function buildSmallBlocks() {
 
   return blocks;
 }
-
 
 // =======================
 // Texture helpers
@@ -525,7 +528,7 @@ function spawnWaterShot() {
   const ex = g_camera.eye.elements[0];
   const ez = g_camera.eye.elements[2];
 
-  const y = -0.20; // align with rocks
+  const y = -0.20;
 
   const sx = ex + f.elements[0] * 0.55;
   const sz = ez + f.elements[2] * 0.55;
@@ -548,7 +551,6 @@ function pointHitsBlock(px, py, pz, b) {
 }
 
 function updateWaterShots(dt) {
-  // auto-fire while holding ctrl+mouse
   if (g_isShooting) {
     g_lastShotTime += dt;
     while (g_lastShotTime >= WATER_RATE) {
@@ -571,7 +573,6 @@ function updateWaterShots(dt) {
       continue;
     }
 
-    // collide with rocks
     let hitIndex = -1;
     for (let j = 0; j < g_smallBlocks.length; j++) {
       if (pointHitsBlock(s.x, s.y, s.z, g_smallBlocks[j])) {
@@ -588,7 +589,12 @@ function updateWaterShots(dt) {
       if (!g_savedShown && g_rocksLeft === 0) {
         g_savedShown = true;
         g_turtleGone = true;
-        showDialogue("Congratulations! You've rescued the turtle! Feel free to stay in this world longer or leave.");
+
+        // ✅ IMPORTANT: set mode to "win"
+        showDialogue(
+          "Congratulations! You've rescued the turtle! Feel free to stay in this world longer or leave.",
+          "win"
+        );
       }
     }
   }
@@ -609,7 +615,9 @@ function drawWaterShots(world) {
 // =======================
 function main() {
   canvas = document.getElementById('webgl');
-  gl = canvas.getContext('webgl', { preserveDrawingBuffer: true });
+
+  // ✅ FPS: do NOT preserve drawing buffer unless you need screenshots
+  gl = canvas.getContext('webgl');
   if (!gl) return;
 
   gl.enable(gl.DEPTH_TEST);
@@ -627,11 +635,11 @@ function main() {
   u_UseTexture = gl.getUniformLocation(gl.program, 'u_UseTexture');
   u_UVScale = gl.getUniformLocation(gl.program, 'u_UVScale');
 
-  // defaults
   if (u_UseTexture) gl.uniform1i(u_UseTexture, 0);
   if (u_UVScale) gl.uniform2f(u_UVScale, 1.0, 1.0);
 
-  gl.clearColor(0.92, 0.92, 0.97, 1);
+  // ✅ SPEED: sky = clearColor (no sky cube draw)
+  gl.clearColor(SKY_COLOR[0], SKY_COLOR[1], SKY_COLOR[2], 1.0);
 
   g_perfEl = document.getElementById('perf');
   g_rocksEl = document.getElementById('rocksHUD');
@@ -646,22 +654,29 @@ function main() {
   else if (typeof TriangularPrism !== 'undefined') g_tri = new TriangularPrism();
   else console.error('Tri prism class not found (TriPrism or TriangularPrism).');
 
-  // build map + blocks
+  // map + blocks
   g_map = buildMap32();
   g_smallBlocks = buildSmallBlocks();
   g_rocksLeft = g_smallBlocks.length;
   g_turtleGone = false;
   g_savedShown = false;
 
-  // load textures (safe fallback if they fail)
+  // textures
   initTexture('mydirt.png', (t) => { g_dirtTex = t; });
   initTexture('sand1.png',  (t) => { g_sandTex = t; });
 
   // camera
   g_camera = new Camera();
-  g_camera.setPerspective(60, canvas.width / canvas.height, 0.1, 2000);
-  g_camera.updateView();
 
+  // ✅ Walls feel taller: smaller FOV
+  g_camera.setPerspective(50, canvas.width / canvas.height, 0.1, 2000);
+
+  // ✅ If Camera.js wasn't updated or you want extra effect:
+  // Lower eye/at a tiny bit (visual only)
+  g_camera.eye.elements[1] -= 0.10;
+  g_camera.at.elements[1]  -= 0.10;
+
+  g_camera.updateView();
   g_defaultEyeY = g_camera.eye.elements[1];
 
   // UI
@@ -771,22 +786,19 @@ function renderScene() {
   world.rotate(g_globalAngle, 0, 1, 0);
 
   drawWorld(world);
-
-  // your turtle draw call stays here, but the FUNCTIONS are below in your turtle section
-  if (!g_turtleGone) {
+ if (!g_turtleGone){
     const turtleWorld = new Matrix4(world);
     turtleWorld.translate(0, 0.18, 0);
-    turtleWorld.scale(0.70, 0.70, 0.70);
+    turtleWorld.scale(0.35, 0.35, 0.35);
     turtleWorld.translate(-0.10, -0.05, 0);
     drawTurtle(turtleWorld);
-  }
+ }
 }
 
 // =======================
 // Render helpers
 // =======================
 function renderCube(color, M) {
-  // force color mode so textures don't "stick"
   if (u_UseTexture) gl.uniform1i(u_UseTexture, 0);
   if (u_UVScale) gl.uniform2f(u_UVScale, 1.0, 1.0);
 
@@ -796,7 +808,6 @@ function renderCube(color, M) {
 }
 
 function renderTexturedCube(M, texture, uvScaleX = 1.0, uvScaleY = 1.0) {
-  // If UV attribute doesn't exist in Cube.js, or texture not ready, fallback to color.
   if (!texture || !u_UseTexture || !u_UVScale || !u_Sampler || a_UV === null || a_UV < 0) {
     renderCube(WALL_COLOR, M);
     return;
@@ -813,12 +824,10 @@ function renderTexturedCube(M, texture, uvScaleX = 1.0, uvScaleY = 1.0) {
   g_cube.matrix.set(M);
   g_cube.render();
 
-  // restore defaults
   gl.bindTexture(gl.TEXTURE_2D, null);
   gl.uniform1i(u_UseTexture, 0);
   gl.uniform2f(u_UVScale, 1.0, 1.0);
 }
-
 function renderCylinder(color, M, segments = null) {
   if (segments !== null) g_cyl.segments = segments;
   g_cyl.color = color;
@@ -850,17 +859,12 @@ function renderTriPrism(color, M) {
   g_tri.render();
 }
 
+
 // =======================
 // World drawing
 // =======================
 function drawWorld(world) {
-  // SKY
-  gl.disable(gl.DEPTH_TEST);
-  let S = new Matrix4(world);
-  S.scale(1000, 1000, 1000);
-  S.scale(-1, 1, 1);
-  renderCube(SKY_COLOR, S);
-  gl.enable(gl.DEPTH_TEST);
+  // ✅ NO SKY CUBE DRAW (you already clearColor in renderScene)
 
   // FLOOR
   let F = new Matrix4(world);
@@ -868,11 +872,10 @@ function drawWorld(world) {
   const floorSize = MAP_SIZE * CELL_SIZE + 2;
   F.scale(floorSize, FLOOR_THICK, floorSize);
 
-  // if sand texture isn't ready, floor falls back to WALL_COLOR (still visible)
   const tiles = 16.0;
   renderTexturedCube(F, g_sandTex, tiles, tiles);
 
-  // WALLS from voxel map
+  // WALLS from voxel map (unchanged)
   const half = MAP_SIZE / 2;
   const baseY = FLOOR_TOP_Y + 0.5;
 
@@ -932,7 +935,7 @@ function drawWorld(world) {
   renderCube(goal, G);
 }
 
-
+// ---- (stopping before Turtle code, per your request) ----
 
 // =======================
 // TURTLE CODE (yours)
