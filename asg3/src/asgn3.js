@@ -98,11 +98,13 @@ const FLOOR_Y = -0.35;
 const FLOOR_THICK = 0.02;
 const FLOOR_TOP_Y = FLOOR_Y + FLOOR_THICK / 2.0;
 
-// Terrain and its controls
+// Terrain + controls
 let g_terrain = null;
 let g_terrainTex = null;
-//Terrain stuff
+
+// Terrains stuff
 let g_terrainBase = FLOOR_Y + 0.08;
+let g_terrainAmp  = 0.60;
 let g_terrainFreq = 0.18;
 let g_eyeHeight   = 0.45;
 
@@ -140,8 +142,8 @@ let g_tmpM0 = null;
 let g_tmpM1 = null;
 let g_tmpM2 = null;
 
-let g_rockBuckets = Object.create(null);
-let g_tmpRockList = [];
+let g_rockBuckets = Object.create(null); // "mx,mz" -> blocks
+let g_tmpRockList = [];                  // reused list
 
 function ensureTmpMatrices() {
   if (!g_tmpM0) g_tmpM0 = new Matrix4();
@@ -430,12 +432,10 @@ function worldToMap(x, z) {
   const mz = Math.floor(z / CELL_SIZE + half);
   return [mx, mz];
 }
-// ===== Minecraft-style block edit (STABLE) =====
 
-// How far ahead we raycast (in cells) to find the first wall column
-const EDIT_RAY_MAX = 4.0;   // try 2.2 or 3.2
-const EDIT_RAY_STEP = 0.15; // smaller = more accurate, slightly more work
-const EDIT_PLACE_MIN = 2.4; // blocks away (try 2.0–3.0)
+const EDIT_RAY_MAX = 4.0;
+const EDIT_RAY_STEP = 0.15;
+const EDIT_PLACE_MIN = 2.4;
 
 
 function getFrontCellStable(findNonEmpty = false) {
@@ -463,9 +463,9 @@ function getFrontCellStable(findNonEmpty = false) {
     last = cell;
 
     if (!findNonEmpty) {
-      return cell;               // placing: first valid cell, but starting farther away
+      return cell;
     } else {
-      if (g_map[mz][mx] > 0) return cell; // removing: first non-empty
+      if (g_map[mz][mx] > 0) return cell;
     }
   }
 
@@ -692,6 +692,7 @@ function addKeyboardControls() {
   });
 }
 
+
 function cellIsWallAtWorld(x, z) {
   if (!g_map) return false;
   const [mx, mz] = worldToMap(x, z);
@@ -858,7 +859,8 @@ function drawWaterShots(world) {
     renderTexturedCube(M, g_waterTex, 1.0, 1.0);
   }
 }
-// main and tick
+
+// Main and Tick functions
 function main() {
   canvas = document.getElementById('webgl');
   gl = canvas.getContext('webgl');
@@ -1057,6 +1059,7 @@ function renderTexturedCube(M, texture, uvScaleX = 1.0, uvScaleY = 1.0) {
   gl.uniform2f(u_UVScale, 1.0, 1.0);
 }
 
+// ===== Scene render =====
 function renderScene() {
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
@@ -1080,6 +1083,7 @@ function renderScene() {
   }
 }
 
+// ===== World draw =====
 function drawWorld(world) {
   ensureTmpMatrices();
   const S = g_tmpM0;
