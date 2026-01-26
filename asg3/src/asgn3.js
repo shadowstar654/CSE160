@@ -206,7 +206,8 @@ function showWelcome() {
     "CTRL + hold mouse: shoot water\n" +
     "P: save, O: load, C: clear save\n" +
     "L: open lore\n" +
-    "SPACE: continue / close",
+    "SPACE: continue / close\n" +
+    "F/R: Delete/Add Blocks",
     "welcome"
   );
 }
@@ -685,8 +686,8 @@ function addKeyboardControls() {
     else if (ev.key === 'ArrowDown') moveBack();
     else if (ev.key === 'ArrowLeft') moveLeft();
     else if (ev.key === 'ArrowRight') moveRight();
-    else if (k === 'f') removeBlockInFront();
-    else if (k === 'r') addBlockInFront();
+    else if (k === 'r') removeBlockInFront();
+    else if (k === 'f') addBlockInFront();
 
 
   });
@@ -913,7 +914,6 @@ function main() {
 
   // Terrain
   g_terrain = new Terrain(140, MAP_SIZE * CELL_SIZE + 6);
-  // IMPORTANT: Terrain.js should read these OR support heightAt(x,z,freq,amp)
   g_terrain.base = g_terrainBase;
   g_terrain.amp  = g_terrainAmp;
   g_terrain.freq = g_terrainFreq;
@@ -1082,8 +1082,7 @@ function renderScene() {
     drawTurtle(turtleWorld);
   }
 }
-
-// ===== World draw =====
+//Draw World
 function drawWorld(world) {
   ensureTmpMatrices();
   const S = g_tmpM0;

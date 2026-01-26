@@ -76,12 +76,18 @@
   </p>
 
   <p><strong>Notes to Grader:</strong>
-    Turtle is the main character in a small world. Use WASD / Arrow keys to move,
-    Q/E to pan, and mouse drag to look around.
-    Press L for lore. Use CTRL + hold mouse to shoot water and remove rocks.
+    I've added my small turtle as the main character of this world! He's currently stuck under a pile of 
+    rocks! Start the game to save him. To look at the lore/story for the world, press
+    L. For the assignment I tried adding texture to all the blocks that
+    are available in the world, including the sky of course. Now for the floor, I began with a flatterned cube,
+    but since I wanted to do the "WoW", I changed it to a terrain. However, I do have my flat_floor code still
+    available in my files. I also have a fall back cube floor, when my terrain and functions don't load and stuff.
+    I really did try my hardest! Also I have F for add blocks and R for remove or delete them. Since it is a terrain,
+    you might need to adjust the angle or where you're standing to add or delete the blocks sometimes. However,
+    it definitely works (I've test tried many times). For the water gun, it shoots in a parabola shape,
+    so the terrain kind of affects its accuracy but I promise I had also tried multiple times at it, and
+    it works. Thank you for reading!
   </p>
-
-  <!-- Perf HUD stays fixed to screen (top-right) -->
   <div id="perf"
        style="position:fixed; top:10px; right:10px; background:#0008; color:#fff;
               padding:8px 10px; font:12px monospace; border-radius:8px; z-index:9999;">
@@ -89,19 +95,15 @@
   </div>
 
   <div id="canvasWrap">
-    <!-- tabindex makes canvas focusable -->
     <canvas id="webgl" width="600" height="600" tabindex="0"></canvas>
-
-    <!-- Rocks HUD now overlays the canvas -->
     <div id="rocksHUD">Rocks left: --</div>
-
     <div id="dialogueBox" class="dialogue hidden">
       <p id="dialogueText">Press L to read the turtle lore...</p>
     </div>
   </div>
 
   <p>
-    Controls: WASD / Arrow keys = move, Q/E = pan, Mouse drag = look
+    Controls: WASD / Arrow keys = move, Q/E = pan, Mouse drag = look, F/R = add/delete
   </p>
 
   <script src="../lib/webgl-utils.js"></script>
