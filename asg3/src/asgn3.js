@@ -389,14 +389,23 @@ void main() {
   gl_FragColor = vec4(finalColor, base.a);
 }
 `;
-
-
-
-// Map helpers
 function makeEmptyMap(size) {
   const m = [];
   for (let z = 0; z < size; z++) m.push(new Array(size).fill(0));
   return m;
+}
+// Map Gen
+function makeEmptyMap(size) {
+  const m = [];
+  for (let z = 0; z < size; z++) m.push(new Array(size).fill(0));
+  return m;
+}
+function randHWeighted() {
+  const r = Math.random();
+  if (r < 0.35) return 1;
+  if (r < 0.65) return 2; 
+  if (r < 0.88) return 3;
+  return 4;
 }
 
 function buildMap32() {
@@ -409,20 +418,30 @@ function buildMap32() {
     m[i][MAP_SIZE - 1] = 4;
   }
 
+
+  // A long column "hallway wall" with varied height
   for (let z = 6; z < 26; z++) {
-    m[z][10] = 3;
-    if (z % 3 === 0) m[z][14] = 2;
+    m[z][10] = randHWeighted();
+    if (z % 3 === 0) m[z][14] = randHWeighted();
   }
 
+  // A rectangular "room" frame with varied height
   for (let x = 18; x < 28; x++) {
-    m[8][x] = 3;
-    m[16][x] = 3;
+    m[8][x]  = randHWeighted();
+    m[16][x] = randHWeighted();
   }
   for (let z = 8; z < 17; z++) {
-    m[z][18] = 3;
-    m[z][27] = 3;
+    m[z][18] = randHWeighted();
+    m[z][27] = randHWeighted();
   }
+
+  // doorway
   m[12][18] = 0;
+  for (let k = 0; k < 20; k++) {
+    const x = 2 + Math.floor(Math.random() * (MAP_SIZE - 4));
+    const z = 2 + Math.floor(Math.random() * (MAP_SIZE - 4));
+    if (m[z][x] === 0) m[z][x] = randHWeighted();
+  }
 
   return m;
 }
@@ -435,54 +454,211 @@ function worldToMap(x, z) {
 }
 
 const EDIT_RAY_MAX = 4.0;
-const EDIT_RAY_STEP = 0.15;
+const EDIT_RAY_STEP = 0.12;
 const EDIT_PLACE_MIN = 2.4;
 
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
-function getFrontCellStable(findNonEmpty = false) {
-  if (!g_camera || !g_map) return null;
+function getEditCandidates(findNonEmpty) {
+  if (!g_camera || !g_map) return [];
 
-  const f = getForwardXZ();
   const ex = g_camera.eye.elements[0];
   const ez = g_camera.eye.elements[2];
 
-  // removing can start close, placing should start farther away
-  const start = findNonEmpty ? 0.60 : EDIT_PLACE_MIN;
+  const f = getForwardXZ();d
+  const half = MAP_SIZE / 2;
 
-  let last = null;
+  function ok(mx, mz) {
+    if (mx < 1 || mz < 1 || mx >= MAP_SIZE - 1 || mz >= MAP_SIZE - 1) return false;
+    if (findNonEmpty) return g_map[mz][mx] > 0;
+    return true;
+  }
 
+  const [mx0, mz0] = worldToMap(ex, ez);
+  const [mxF, mzF] = worldToMap(ex + f.elements[0] * 0.55, ez + f.elements[2] * 0.55);
+
+  const offsets = [
+    [0, 0],
+    [1, 0], [-1, 0],
+    [0, 1], [0, -1],
+    [1, 1], [1, -1], [-1, 1], [-1, -1],
+  ];
+
+  const cand = [];
+  const seen = new Set();
+
+  function push(mx, mz) {
+    const key = mx + "," + mz;
+    if (seen.has(key)) return;
+    seen.add(key);
+    if (!ok(mx, mz)) return;
+    cand.push({ mx, mz });
+  }
+
+  for (const [dx, dz] of offsets) push(mxF + dx, mzF + dz);
+  for (const [dx, dz] of offsets) push(mx0 + dx, mz0 + dz);
+
+  const start = findNonEmpty ? 0.45 : EDIT_PLACE_MIN;
+
+  let lastKey = "";
   for (let t = start; t <= EDIT_RAY_MAX; t += EDIT_RAY_STEP) {
     const px = ex + f.elements[0] * t;
     const pz = ez + f.elements[2] * t;
-
     const [mx, mz] = worldToMap(px, pz);
 
-    if (mx < 1 || mz < 1 || mx >= MAP_SIZE - 1 || mz >= MAP_SIZE - 1) continue;
-    if (last && last.mx === mx && last.mz === mz) continue;
+    const key = mx + "," + mz;
+    if (key === lastKey) continue;
+    lastKey = key;
 
-    const cell = { mx, mz };
-    last = cell;
+    push(mx, mz);
+    push(mx + 1, mz);
+    push(mx - 1, mz);
+    push(mx, mz + 1);
+    push(mx, mz - 1);
 
-    if (!findNonEmpty) {
-      return cell;
-    } else {
-      if (g_map[mz][mx] > 0) return cell;
-    }
+    if (findNonEmpty && g_map[mz][mx] > 0) break;
   }
 
-  return findNonEmpty ? null : last;
+  return cand;
+}
+
+function getFrontCellStable(findNonEmpty = false) {
+  const cands = getEditCandidates(findNonEmpty);
+  return cands.length ? cands[0] : null;
 }
 
 function removeBlockInFront() {
-  const c = getFrontCellStable(true);
-  if (!c) return;
+  const cands = getEditCandidates(true);
+  if (!cands.length) return;
+  const c = cands[0];
   g_map[c.mz][c.mx] = Math.max(0, g_map[c.mz][c.mx] - 1);
 }
+function getEditCandidates(findNonEmpty) {
+  if (!g_camera || !g_map) return [];
+
+  const ex = g_camera.eye.elements[0];
+  const ez = g_camera.eye.elements[2];
+  const f = getForwardXZ();
+
+  const [pMx, pMz] = worldToMap(ex, ez);
+
+  function inBounds(mx, mz) {
+    return !(mx < 1 || mz < 1 || mx >= MAP_SIZE - 1 || mz >= MAP_SIZE - 1);
+  }
+
+  function ok(mx, mz) {
+    if (!inBounds(mx, mz)) return false;
+
+    if (findNonEmpty) {
+      return g_map[mz][mx] > 0;
+    } else {
+      if (g_map[mz][mx] !== 0) return false;
+
+      const dx = mx - pMx;
+      const dz = mz - pMz;
+      if (dx * dx + dz * dz <= 1) return false;s
+
+      return true;
+    }
+  }
+
+  const cand = [];
+  const seen = new Set();
+
+  function push(mx, mz) {
+    const key = mx + "," + mz;
+    if (seen.has(key)) return;
+    seen.add(key);
+    if (!ok(mx, mz)) return;
+    cand.push({ mx, mz });
+  }
+
+  if (findNonEmpty) {
+    const [mx0, mz0] = worldToMap(ex, ez);
+    const [mxF, mzF] = worldToMap(ex + f.elements[0] * 0.55, ez + f.elements[2] * 0.55);
+
+    const offsets = [
+      [0, 0],
+      [1, 0], [-1, 0],
+      [0, 1], [0, -1],
+      [1, 1], [1, -1], [-1, 1], [-1, -1],
+    ];
+
+    for (const [dx, dz] of offsets) push(mxF + dx, mzF + dz);
+    for (const [dx, dz] of offsets) push(mx0 + dx, mz0 + dz);
+
+    let lastKey = "";
+    for (let t = 0.45; t <= EDIT_RAY_MAX; t += EDIT_RAY_STEP) {
+      const px = ex + f.elements[0] * t;
+      const pz = ez + f.elements[2] * t;
+      const [mx, mz] = worldToMap(px, pz);
+
+      const key = mx + "," + mz;
+      if (key === lastKey) continue;
+      lastKey = key;
+
+      push(mx, mz);
+      push(mx + 1, mz);
+      push(mx - 1, mz);
+      push(mx, mz + 1);
+      push(mx, mz - 1);
+
+      if (g_map[mz][mx] > 0) break;
+    }
+
+    return cand;
+  }
+
+  let lastKey = "";
+  for (let t = EDIT_PLACE_MIN; t <= EDIT_RAY_MAX; t += EDIT_RAY_STEP) {
+    const px = ex + f.elements[0] * t;
+    const pz = ez + f.elements[2] * t;
+    const [mx, mz] = worldToMap(px, pz);
+
+    const key = mx + "," + mz;
+    if (key === lastKey) continue;
+    lastKey = key;
+
+    push(mx, mz);
+    push(mx + 1, mz);
+    push(mx - 1, mz);
+    push(mx, mz + 1);
+    push(mx, mz - 1);
+
+    if (cand.length) break;
+  }
+
+  return cand;
+}
+
+
 function addBlockInFront() {
-  const c = getFrontCellStable(false);
-  if (!c) return;
+  if (!g_camera || !g_map) return;
+
+  // forward vector including Y
+  const f3 = new Vector3(g_camera.at.elements);
+  f3.sub(g_camera.eye);
+  f3.normalize();
+
+  const lookY = f3.elements[1];
+
+  const cands = getEditCandidates(false);
+  if (!cands.length) return;
+  let pick = 0;
+
+  if (lookY > 0.25) {
+    pick = 0; // closest
+  } else if (lookY < -0.25) {
+    pick = Math.min(2, cands.length - 1);
+  } else {
+    pick = 0; // normal
+  }
+
+  const c = cands[pick];
   g_map[c.mz][c.mx] = Math.min(4, g_map[c.mz][c.mx] + 1);
 }
+
+
 
 
 function getForwardXZ() {
