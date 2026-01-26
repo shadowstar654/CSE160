@@ -1,8 +1,3 @@
-/* ===========================
-   asg3.js (PART 1/2)
-   Globals + helpers + input + save/load + terrain helpers
-   =========================== */
-
 let canvas, gl;
 
 // GLSL locations
@@ -98,24 +93,21 @@ const PLAYER_RADIUS = 0.20;
 const STEP_MAX = 0.40;
 const GRAVITY_DOWN = 0.03;
 
-// Floor baseline (kept for reference / fallback)
+// Floor baseline (kept for reference)
 const FLOOR_Y = -0.35;
 const FLOOR_THICK = 0.02;
 const FLOOR_TOP_Y = FLOOR_Y + FLOOR_THICK / 2.0;
 
-// Terrain + controls
+// Terrain and its controls
 let g_terrain = null;
 let g_terrainTex = null;
-
-// --- Terrain controls (ADJUST THESE) ---
-let g_terrainBase = FLOOR_Y + 0.08; // overall lift of terrain
-let g_terrainAmp  = 0.60;           // hills height
-let g_terrainFreq = 0.18;           // hills frequency
-let g_eyeHeight   = 0.45;           // camera height above ground
+//Terrain stuff
+let g_terrainBase = FLOOR_Y + 0.08;
+let g_terrainFreq = 0.18;
+let g_eyeHeight   = 0.45;
 
 function groundYAtWorld(x, z) {
   if (!g_terrain) return FLOOR_TOP_Y;
-  // Terrain.heightAt MUST accept (x,z,freq,amp) OR you set g_terrain.freq/amp
   return g_terrainBase + g_terrain.heightAt(x, z, g_terrainFreq, g_terrainAmp);
 }
 function playerEyeYAt(x, z) {
@@ -148,8 +140,8 @@ let g_tmpM0 = null;
 let g_tmpM1 = null;
 let g_tmpM2 = null;
 
-let g_rockBuckets = Object.create(null); // "mx,mz" -> blocks
-let g_tmpRockList = [];                  // reused list
+let g_rockBuckets = Object.create(null);
+let g_tmpRockList = [];
 
 function ensureTmpMatrices() {
   if (!g_tmpM0) g_tmpM0 = new Matrix4();
@@ -481,12 +473,12 @@ function getFrontCellStable(findNonEmpty = false) {
 }
 
 function removeBlockInFront() {
-  const c = getFrontCellStable(true); // true => find first non-empty column
+  const c = getFrontCellStable(true);
   if (!c) return;
   g_map[c.mz][c.mx] = Math.max(0, g_map[c.mz][c.mx] - 1);
 }
 function addBlockInFront() {
-  const c = getFrontCellStable(false); // false => first valid cell in front (uses EDIT_PLACE_MIN)
+  const c = getFrontCellStable(false);
   if (!c) return;
   g_map[c.mz][c.mx] = Math.min(4, g_map[c.mz][c.mx] + 1);
 }
@@ -699,10 +691,6 @@ function addKeyboardControls() {
 
   });
 }
-/* ===========================
-   asg3.js (PART 2/2)
-   Texture init + water shots + main/tick + rendering + world draw
-   =========================== */
 
 function cellIsWallAtWorld(x, z) {
   if (!g_map) return false;
@@ -870,8 +858,7 @@ function drawWaterShots(world) {
     renderTexturedCube(M, g_waterTex, 1.0, 1.0);
   }
 }
-
-// ===== Main / Tick =====
+// main and tick
 function main() {
   canvas = document.getElementById('webgl');
   gl = canvas.getContext('webgl');
@@ -1039,7 +1026,6 @@ function updateAnimationAngles() {
   g_br2 = 14 * Math.abs(a);
 }
 
-// ===== Rendering helpers =====
 function renderCube(color, M) {
   if (u_UseTexture) gl.uniform1i(u_UseTexture, 0);
   if (u_UVScale) gl.uniform2f(u_UVScale, 1.0, 1.0);
@@ -1071,7 +1057,6 @@ function renderTexturedCube(M, texture, uvScaleX = 1.0, uvScaleY = 1.0) {
   gl.uniform2f(u_UVScale, 1.0, 1.0);
 }
 
-// ===== Scene render =====
 function renderScene() {
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
@@ -1095,7 +1080,6 @@ function renderScene() {
   }
 }
 
-// ===== World draw =====
 function drawWorld(world) {
   ensureTmpMatrices();
   const S = g_tmpM0;
