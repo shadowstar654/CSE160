@@ -438,6 +438,59 @@ function worldToMap(x, z) {
   const mz = Math.floor(z / CELL_SIZE + half);
   return [mx, mz];
 }
+// ===== Minecraft-style block edit (STABLE) =====
+
+// How far ahead we raycast (in cells) to find the first wall column
+const EDIT_RAY_MAX = 4.0;   // try 2.2 or 3.2
+const EDIT_RAY_STEP = 0.15; // smaller = more accurate, slightly more work
+const EDIT_PLACE_MIN = 2.4; // blocks away (try 2.0–3.0)
+
+
+function getFrontCellStable(findNonEmpty = false) {
+  if (!g_camera || !g_map) return null;
+
+  const f = getForwardXZ();
+  const ex = g_camera.eye.elements[0];
+  const ez = g_camera.eye.elements[2];
+
+  // removing can start close, placing should start farther away
+  const start = findNonEmpty ? 0.60 : EDIT_PLACE_MIN;
+
+  let last = null;
+
+  for (let t = start; t <= EDIT_RAY_MAX; t += EDIT_RAY_STEP) {
+    const px = ex + f.elements[0] * t;
+    const pz = ez + f.elements[2] * t;
+
+    const [mx, mz] = worldToMap(px, pz);
+
+    if (mx < 1 || mz < 1 || mx >= MAP_SIZE - 1 || mz >= MAP_SIZE - 1) continue;
+    if (last && last.mx === mx && last.mz === mz) continue;
+
+    const cell = { mx, mz };
+    last = cell;
+
+    if (!findNonEmpty) {
+      return cell;               // placing: first valid cell, but starting farther away
+    } else {
+      if (g_map[mz][mx] > 0) return cell; // removing: first non-empty
+    }
+  }
+
+  return findNonEmpty ? null : last;
+}
+
+function removeBlockInFront() {
+  const c = getFrontCellStable(true); // true => find first non-empty column
+  if (!c) return;
+  g_map[c.mz][c.mx] = Math.max(0, g_map[c.mz][c.mx] - 1);
+}
+function addBlockInFront() {
+  const c = getFrontCellStable(false); // false => first valid cell in front (uses EDIT_PLACE_MIN)
+  if (!c) return;
+  g_map[c.mz][c.mx] = Math.min(4, g_map[c.mz][c.mx] + 1);
+}
+
 
 function getForwardXZ() {
   const f = new Vector3(g_camera.at.elements);
@@ -593,7 +646,8 @@ function addMouseControls() {
   canvas.addEventListener('mousemove', (ev) => {
     if (!g_isDragging || !g_camera) return;
     const dx = ev.clientX - g_lastMouseX;
-    const dy = ev.clientX - g_lastMouseX; // (kept your original vibe)
+    const dy = ev.clientX - g_lastMouseY;
+
     g_lastMouseX = ev.clientX;
     g_lastMouseY = ev.clientY;
 
@@ -639,6 +693,9 @@ function addKeyboardControls() {
     else if (ev.key === 'ArrowDown') moveBack();
     else if (ev.key === 'ArrowLeft') moveLeft();
     else if (ev.key === 'ArrowRight') moveRight();
+    else if (k === 'f') removeBlockInFront();
+    else if (k === 'r') addBlockInFront();
+
 
   });
 }
