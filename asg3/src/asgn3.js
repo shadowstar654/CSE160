@@ -464,7 +464,7 @@ function getEditCandidates(findNonEmpty) {
 
   const ex = g_camera.eye.elements[0];
   const ez = g_camera.eye.elements[2];
-  const f = getForwardXZ(); // XZ only for map targeting
+  const f = getForwardXZ();
 
   const [pMx, pMz] = worldToMap(ex, ez);
 
@@ -481,10 +481,9 @@ function getEditCandidates(findNonEmpty) {
       // PLACE ONLY on empty
       if (g_map[mz][mx] !== 0) return false;
 
-      // DO NOT place on/next-to player cell (prevents "on top of me")
       const dx = mx - pMx;
       const dz = mz - pMz;
-      if (dx * dx + dz * dz <= 2) return false; // radius sqrt(2)~1.41 cells
+      if (dx * dx + dz * dz <= 2) return false;
 
       return true;
     }
@@ -501,7 +500,6 @@ function getEditCandidates(findNonEmpty) {
     cand.push({ mx, mz });
   }
 
-  // Offsets to help when grazing edges
   const offsets = [
     [0, 0],
     [1, 0], [-1, 0],
@@ -510,7 +508,6 @@ function getEditCandidates(findNonEmpty) {
   ];
 
   if (findNonEmpty) {
-    // removal: search near front + current, then ray
     const [mx0, mz0] = worldToMap(ex, ez);
     const [mxF, mzF] = worldToMap(ex + f.elements[0] * 0.55, ez + f.elements[2] * 0.55);
 
@@ -538,8 +535,6 @@ function getEditCandidates(findNonEmpty) {
 
     return cand;
   }
-
-  // placement: ray forward until we find the first valid empty cell
   let lastKey = "";
   for (let t = EDIT_PLACE_MIN; t <= EDIT_RAY_MAX; t += EDIT_RAY_STEP) {
     const px = ex + f.elements[0] * t;
@@ -550,14 +545,13 @@ function getEditCandidates(findNonEmpty) {
     if (key === lastKey) continue;
     lastKey = key;
 
-    // prefer exact ray cell then neighbors
     push(mx, mz);
     push(mx + 1, mz);
     push(mx - 1, mz);
     push(mx, mz + 1);
     push(mx, mz - 1);
 
-    if (cand.length) break; // stop ASAP once we found a good placement cell
+    if (cand.length) break;
   }
 
   return cand;
@@ -566,7 +560,6 @@ function getEditCandidates(findNonEmpty) {
 function addBlockInFront() {
   if (!g_camera || !g_map) return;
 
-  // forward vector including Y for "vertical intent"
   const f3 = new Vector3(g_camera.at.elements);
   f3.sub(g_camera.eye);
   f3.normalize();
@@ -574,17 +567,10 @@ function addBlockInFront() {
 
   const cands = getEditCandidates(false);
   if (!cands.length) return;
-
-  // looking down -> pick slightly farther candidate
-  // looking up/flat -> closest candidate
   let pick = 0;
   if (lookY < -0.25) pick = Math.min(2, cands.length - 1);
 
   const c = cands[pick];
-
-  // IMPORTANT: since placement uses "empty only",
-  // this will place a NEW column (height 1) instead of stacking.
-  // If you want stacking instead, see note below.
   g_map[c.mz][c.mx] = 1;
 }
 
@@ -629,9 +615,6 @@ function addBlockInFront() {
   const c = cands[pick];
   g_map[c.mz][c.mx] = Math.min(4, g_map[c.mz][c.mx] + 1);
 }
-
-
-
 
 function getForwardXZ() {
   const f = new Vector3(g_camera.at.elements);
