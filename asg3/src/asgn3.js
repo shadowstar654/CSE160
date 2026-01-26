@@ -11,7 +11,7 @@ let a_UV = null;
 
 let u_FragColor, u_ModelMatrix;
 let u_ViewMatrix, u_ProjectionMatrix;
-
+let u_UseFog   = null;
 let u_Sampler = null;
 let u_UseTexture = null;
 let u_UVScale = null;
@@ -340,31 +340,62 @@ function clearSave() {
 const VSHADER_SOURCE = `
 attribute vec4 a_Position;
 attribute vec2 a_UV;
+
 uniform mat4 u_ModelMatrix;
 uniform mat4 u_ViewMatrix;
 uniform mat4 u_ProjectionMatrix;
+
 varying vec2 v_UV;
+varying float v_Depth;
+
 void main() {
-  gl_Position = u_ProjectionMatrix * u_ViewMatrix * u_ModelMatrix * a_Position;
+  vec4 viewPos = u_ViewMatrix * u_ModelMatrix * a_Position;
+  gl_Position = u_ProjectionMatrix * viewPos;
   v_UV = a_UV;
+  v_Depth = -viewPos.z;
 }
 `;
 
 const FSHADER_SOURCE = `
 precision mediump float;
+
 uniform vec4 u_FragColor;
 uniform sampler2D u_Sampler;
 uniform int u_UseTexture;
 uniform vec2 u_UVScale;
+
+uniform vec3 u_FogColor;
+uniform float u_FogNear;
+uniform float u_FogFar;
+uniform int u_UseFog;
+
 varying vec2 v_UV;
+varying float v_Depth;
+
 void main() {
+  vec4 base;
   if (u_UseTexture == 1) {
-    gl_FragColor = texture2D(u_Sampler, v_UV * u_UVScale);
+    base = texture2D(u_Sampler, v_UV * u_UVScale);
   } else {
-    gl_FragColor = u_FragColor;
+    base = u_FragColor;
   }
+
+  vec3 finalColor = base.rgb;
+
+  if (u_UseFog == 1) {
+    float fogT = clamp(
+      (v_Depth - u_FogNear) / (u_FogFar - u_FogNear),
+      0.0,
+      1.0
+    );
+    finalColor = mix(base.rgb, u_FogColor, fogT);
+  }
+
+  gl_FragColor = vec4(finalColor, base.a);
 }
 `;
+
+
 
 // Map helpers
 function makeEmptyMap(size) {
@@ -808,6 +839,18 @@ function main() {
   if (u_UVScale) gl.uniform2f(u_UVScale, 1.0, 1.0);
 
   gl.clearColor(SKY_COLOR[0], SKY_COLOR[1], SKY_COLOR[2], 1.0);
+  const u_FogColor = gl.getUniformLocation(gl.program, 'u_FogColor');
+  const u_FogNear  = gl.getUniformLocation(gl.program, 'u_FogNear');
+  const u_FogFar   = gl.getUniformLocation(gl.program, 'u_FogFar');
+  u_UseFog   = gl.getUniformLocation(gl.program, 'u_UseFog');
+
+
+  // Match your sky:
+  gl.uniform3f(u_FogColor, SKY_COLOR[0], SKY_COLOR[1], SKY_COLOR[2]);
+
+  // Tune these:
+  gl.uniform1f(u_FogNear, 8.0);
+  gl.uniform1f(u_FogFar,  22.0);
 
   g_perfEl = document.getElementById('perf');
   g_rocksEl = document.getElementById('rocksHUD');
@@ -1003,6 +1046,7 @@ function drawWorld(world) {
   const M2 = g_tmpM2;
 
   gl.disable(gl.DEPTH_TEST);
+  gl.uniform1i(u_UseFog, 0); 
 
   // Sky
   S.set(world);
@@ -1012,7 +1056,7 @@ function drawWorld(world) {
   else renderCube(SKY_COLOR, S);
 
   gl.enable(gl.DEPTH_TEST);
-
+  gl.uniform1i(u_UseFog, 1);
   // Terrain
   if (g_terrain) {
     g_terrain.render(gl, world, g_terrainTex || g_sandTex);
