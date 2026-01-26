@@ -464,86 +464,12 @@ function getEditCandidates(findNonEmpty) {
 
   const ex = g_camera.eye.elements[0];
   const ez = g_camera.eye.elements[2];
-
-  const f = getForwardXZ();d
-  const half = MAP_SIZE / 2;
-
-  function ok(mx, mz) {
-    if (mx < 1 || mz < 1 || mx >= MAP_SIZE - 1 || mz >= MAP_SIZE - 1) return false;
-    if (findNonEmpty) return g_map[mz][mx] > 0;
-    return true;
-  }
-
-  const [mx0, mz0] = worldToMap(ex, ez);
-  const [mxF, mzF] = worldToMap(ex + f.elements[0] * 0.55, ez + f.elements[2] * 0.55);
-
-  const offsets = [
-    [0, 0],
-    [1, 0], [-1, 0],
-    [0, 1], [0, -1],
-    [1, 1], [1, -1], [-1, 1], [-1, -1],
-  ];
-
-  const cand = [];
-  const seen = new Set();
-
-  function push(mx, mz) {
-    const key = mx + "," + mz;
-    if (seen.has(key)) return;
-    seen.add(key);
-    if (!ok(mx, mz)) return;
-    cand.push({ mx, mz });
-  }
-
-  for (const [dx, dz] of offsets) push(mxF + dx, mzF + dz);
-  for (const [dx, dz] of offsets) push(mx0 + dx, mz0 + dz);
-
-  const start = findNonEmpty ? 0.45 : EDIT_PLACE_MIN;
-
-  let lastKey = "";
-  for (let t = start; t <= EDIT_RAY_MAX; t += EDIT_RAY_STEP) {
-    const px = ex + f.elements[0] * t;
-    const pz = ez + f.elements[2] * t;
-    const [mx, mz] = worldToMap(px, pz);
-
-    const key = mx + "," + mz;
-    if (key === lastKey) continue;
-    lastKey = key;
-
-    push(mx, mz);
-    push(mx + 1, mz);
-    push(mx - 1, mz);
-    push(mx, mz + 1);
-    push(mx, mz - 1);
-
-    if (findNonEmpty && g_map[mz][mx] > 0) break;
-  }
-
-  return cand;
-}
-
-function getFrontCellStable(findNonEmpty = false) {
-  const cands = getEditCandidates(findNonEmpty);
-  return cands.length ? cands[0] : null;
-}
-
-function removeBlockInFront() {
-  const cands = getEditCandidates(true);
-  if (!cands.length) return;
-  const c = cands[0];
-  g_map[c.mz][c.mx] = Math.max(0, g_map[c.mz][c.mx] - 1);
-}
-function getEditCandidates(findNonEmpty) {
-  if (!g_camera || !g_map) return [];
-
-  const ex = g_camera.eye.elements[0];
-  const ez = g_camera.eye.elements[2];
-  const f = getForwardXZ();
+  const f = getForwardXZ(); // XZ only for map targeting
 
   const [pMx, pMz] = worldToMap(ex, ez);
 
   function inBounds(mx, mz) {
-    return !(mx < 1 || mz < 1 || mx >= MAP_SIZE - 1 || mz >= MAP_SIZE - 1);
+    return (mx >= 1 && mz >= 1 && mx < MAP_SIZE - 1 && mz < MAP_SIZE - 1);
   }
 
   function ok(mx, mz) {
@@ -552,11 +478,13 @@ function getEditCandidates(findNonEmpty) {
     if (findNonEmpty) {
       return g_map[mz][mx] > 0;
     } else {
+      // PLACE ONLY on empty
       if (g_map[mz][mx] !== 0) return false;
 
+      // DO NOT place on/next-to player cell (prevents "on top of me")
       const dx = mx - pMx;
       const dz = mz - pMz;
-      if (dx * dx + dz * dz <= 1) return false;s
+      if (dx * dx + dz * dz <= 2) return false; // radius sqrt(2)~1.41 cells
 
       return true;
     }
@@ -573,16 +501,18 @@ function getEditCandidates(findNonEmpty) {
     cand.push({ mx, mz });
   }
 
+  // Offsets to help when grazing edges
+  const offsets = [
+    [0, 0],
+    [1, 0], [-1, 0],
+    [0, 1], [0, -1],
+    [1, 1], [1, -1], [-1, 1], [-1, -1],
+  ];
+
   if (findNonEmpty) {
+    // removal: search near front + current, then ray
     const [mx0, mz0] = worldToMap(ex, ez);
     const [mxF, mzF] = worldToMap(ex + f.elements[0] * 0.55, ez + f.elements[2] * 0.55);
-
-    const offsets = [
-      [0, 0],
-      [1, 0], [-1, 0],
-      [0, 1], [0, -1],
-      [1, 1], [1, -1], [-1, 1], [-1, -1],
-    ];
 
     for (const [dx, dz] of offsets) push(mxF + dx, mzF + dz);
     for (const [dx, dz] of offsets) push(mx0 + dx, mz0 + dz);
@@ -609,6 +539,7 @@ function getEditCandidates(findNonEmpty) {
     return cand;
   }
 
+  // placement: ray forward until we find the first valid empty cell
   let lastKey = "";
   for (let t = EDIT_PLACE_MIN; t <= EDIT_RAY_MAX; t += EDIT_RAY_STEP) {
     const px = ex + f.elements[0] * t;
@@ -619,17 +550,58 @@ function getEditCandidates(findNonEmpty) {
     if (key === lastKey) continue;
     lastKey = key;
 
+    // prefer exact ray cell then neighbors
     push(mx, mz);
     push(mx + 1, mz);
     push(mx - 1, mz);
     push(mx, mz + 1);
     push(mx, mz - 1);
 
-    if (cand.length) break;
+    if (cand.length) break; // stop ASAP once we found a good placement cell
   }
 
   return cand;
 }
+
+function addBlockInFront() {
+  if (!g_camera || !g_map) return;
+
+  // forward vector including Y for "vertical intent"
+  const f3 = new Vector3(g_camera.at.elements);
+  f3.sub(g_camera.eye);
+  f3.normalize();
+  const lookY = f3.elements[1];
+
+  const cands = getEditCandidates(false);
+  if (!cands.length) return;
+
+  // looking down -> pick slightly farther candidate
+  // looking up/flat -> closest candidate
+  let pick = 0;
+  if (lookY < -0.25) pick = Math.min(2, cands.length - 1);
+
+  const c = cands[pick];
+
+  // IMPORTANT: since placement uses "empty only",
+  // this will place a NEW column (height 1) instead of stacking.
+  // If you want stacking instead, see note below.
+  g_map[c.mz][c.mx] = 1;
+}
+
+
+function getFrontCellStable(findNonEmpty = false) {
+  const cands = getEditCandidates(findNonEmpty);
+  return cands.length ? cands[0] : null;
+}
+
+function removeBlockInFront() {
+  const cands = getEditCandidates(true);
+  if (!cands.length) return;
+  const c = cands[0];
+  g_map[c.mz][c.mx] = Math.max(0, g_map[c.mz][c.mx] - 1);
+}
+
+ 
 
 
 function addBlockInFront() {
