@@ -602,10 +602,13 @@ function addKeyboardControls() {
     else if (k === 's') moveBack();
     else if (k === 'a') moveLeft();
     else if (k === 'd') moveRight();
+    else if (k === 'q') g_camera.panRight();
+    else if (k === 'e') g_camera.panLeft();
     else if (ev.key === 'ArrowUp') moveForward();
     else if (ev.key === 'ArrowDown') moveBack();
     else if (ev.key === 'ArrowLeft') moveLeft();
     else if (ev.key === 'ArrowRight') moveRight();
+
   });
 }
 /* ===========================
@@ -621,7 +624,7 @@ function cellIsWallAtWorld(x, z) {
 }
 
 function buildSmallBlocks() {
-  const half = 0.30;
+  const half = 0.18;
   const blocks = [];
   const WANT = 10;
 
@@ -982,7 +985,7 @@ function renderScene() {
 
   if (!g_turtleGone) {
     // Put turtle on terrain near origin
-    const ty = groundYAtWorld(0, 0) + 0.06;
+    const ty = groundYAtWorld(0, 0) + 0.20;
 
     const turtleWorld = new Matrix4(world);
     turtleWorld.translate(0, ty, 0);
