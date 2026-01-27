@@ -389,11 +389,7 @@ void main() {
   gl_FragColor = vec4(finalColor, base.a);
 }
 `;
-function makeEmptyMap(size) {
-  const m = [];
-  for (let z = 0; z < size; z++) m.push(new Array(size).fill(0));
-  return m;
-}
+
 // Map Gen
 function makeEmptyMap(size) {
   const m = [];
