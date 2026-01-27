@@ -459,161 +459,161 @@ const EDIT_PLACE_MIN = 2.4;
 
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
-function getEditCandidates(findNonEmpty) {
-  if (!g_camera || !g_map) return [];
+function inBounds(mx, mz) {
+  return (mx >= 1 && mz >= 1 && mx < MAP_SIZE - 1 && mz < MAP_SIZE - 1);
+}
+
+// march along the *full* look direction (includes Y)
+function getLookDir3D() {
+  const d = new Vector3(g_camera.at.elements);
+  d.sub(g_camera.eye);
+  d.normalize();
+  return d;
+}
+
+function rayPickNonEmptyCell(maxDist = 6.0, step = 0.04) {
+  if (!g_camera || !g_map) return null;
+
+  const ex = g_camera.eye.elements[0];
+  const ey = g_camera.eye.elements[1];
+  const ez = g_camera.eye.elements[2];
+  const d = getLookDir3D();
+
+  let best = null;
+  let bestT = 1e9;
+
+  // iterate along ray
+  for (let t = 0.25; t <= maxDist; t += step) {
+    const px = ex + d.elements[0] * t;
+    const py = ey + d.elements[1] * t;
+    const pz = ez + d.elements[2] * t;
+
+    const [mx0, mz0] = worldToMap(px, pz);
+
+    // check a small neighborhood to avoid "wrong neighbor" near edges
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const mx = mx0 + dx;
+        const mz = mz0 + dz;
+        if (!inBounds(mx, mz)) continue;
+
+        const h = g_map[mz][mx];
+        if (h <= 0) continue;
+
+        const wx = (mx - MAP_SIZE / 2) * CELL_SIZE;
+        const wz = (mz - MAP_SIZE / 2) * CELL_SIZE;
+
+        const bottom = groundYAtWorld(wx, wz);
+        const top = bottom + h * 1.0;
+
+        // must be inside the vertical span
+        if (py < bottom || py > top) continue;
+
+        // also require the ray point to be *inside the cell footprint* (tightens a lot)
+        if (px < wx - 0.5 || px > wx + 0.5) continue;
+        if (pz < wz - 0.5 || pz > wz + 0.5) continue;
+
+        // take the earliest hit along the ray
+        if (t < bestT) {
+          bestT = t;
+          best = { mx, mz };
+        }
+      }
+    }
+
+    // early exit once we found a hit very close
+    if (best && bestT < t + step * 2.0) break;
+  }
+
+  return best;
+}
+function directPickNonEmptyCell(dist = 2.2) {
+  if (!g_camera || !g_map) return null;
+  const d = getLookDir3D();
+  const px = g_camera.eye.elements[0] + d.elements[0] * dist;
+  const py = g_camera.eye.elements[1] + d.elements[1] * dist;
+  const pz = g_camera.eye.elements[2] + d.elements[2] * dist;
+
+  const [mx0, mz0] = worldToMap(px, pz);
+  for (let dz = -1; dz <= 1; dz++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const mx = mx0 + dx, mz = mz0 + dz;
+      if (!inBounds(mx, mz)) continue;
+      const h = g_map[mz][mx];
+      if (h <= 0) continue;
+
+      const wx = (mx - MAP_SIZE / 2) * CELL_SIZE;
+      const wz = (mz - MAP_SIZE / 2) * CELL_SIZE;
+      const bottom = groundYAtWorld(wx, wz);
+      const top = bottom + h * 1.0;
+
+      if (py >= bottom && py <= top &&
+          px >= wx - 0.5 && px <= wx + 0.5 &&
+          pz >= wz - 0.5 && pz <= wz + 0.5) {
+        return { mx, mz };
+      }
+    }
+  }
+  return null;
+}
+
+// Find the first EMPTY cell in front of you (for placing new columns)
+function rayPickEmptyCell(minDist = 2.4, maxDist = 6.0, step = 0.08) {
+  if (!g_camera || !g_map) return null;
 
   const ex = g_camera.eye.elements[0];
   const ez = g_camera.eye.elements[2];
-  const f = getForwardXZ();
+  const d = getLookDir3D();
 
   const [pMx, pMz] = worldToMap(ex, ez);
 
-  function inBounds(mx, mz) {
-    return (mx >= 1 && mz >= 1 && mx < MAP_SIZE - 1 && mz < MAP_SIZE - 1);
-  }
-
-  function ok(mx, mz) {
-    if (!inBounds(mx, mz)) return false;
-
-    if (findNonEmpty) {
-      return g_map[mz][mx] > 0;
-    } else {
-      // PLACE ONLY on empty
-      if (g_map[mz][mx] !== 0) return false;
-
-      const dx = mx - pMx;
-      const dz = mz - pMz;
-      if (dx * dx + dz * dz <= 2) return false;
-
-      return true;
-    }
-  }
-
-  const cand = [];
-  const seen = new Set();
-
-  function push(mx, mz) {
-    const key = mx + "," + mz;
-    if (seen.has(key)) return;
-    seen.add(key);
-    if (!ok(mx, mz)) return;
-    cand.push({ mx, mz });
-  }
-
-  const offsets = [
-    [0, 0],
-    [1, 0], [-1, 0],
-    [0, 1], [0, -1],
-    [1, 1], [1, -1], [-1, 1], [-1, -1],
-  ];
-
-  if (findNonEmpty) {
-    const [mx0, mz0] = worldToMap(ex, ez);
-    const [mxF, mzF] = worldToMap(ex + f.elements[0] * 0.55, ez + f.elements[2] * 0.55);
-
-    for (const [dx, dz] of offsets) push(mxF + dx, mzF + dz);
-    for (const [dx, dz] of offsets) push(mx0 + dx, mz0 + dz);
-
-    let lastKey = "";
-    for (let t = 0.45; t <= EDIT_RAY_MAX; t += EDIT_RAY_STEP) {
-      const px = ex + f.elements[0] * t;
-      const pz = ez + f.elements[2] * t;
-      const [mx, mz] = worldToMap(px, pz);
-
-      const key = mx + "," + mz;
-      if (key === lastKey) continue;
-      lastKey = key;
-
-      push(mx, mz);
-      push(mx + 1, mz);
-      push(mx - 1, mz);
-      push(mx, mz + 1);
-      push(mx, mz - 1);
-
-      if (g_map[mz][mx] > 0) break;
-    }
-
-    return cand;
-  }
   let lastKey = "";
-  for (let t = EDIT_PLACE_MIN; t <= EDIT_RAY_MAX; t += EDIT_RAY_STEP) {
-    const px = ex + f.elements[0] * t;
-    const pz = ez + f.elements[2] * t;
+  for (let t = minDist; t <= maxDist; t += step) {
+    const px = ex + d.elements[0] * t;
+    const pz = ez + d.elements[2] * t;
     const [mx, mz] = worldToMap(px, pz);
+
+    if (!inBounds(mx, mz)) continue;
 
     const key = mx + "," + mz;
     if (key === lastKey) continue;
     lastKey = key;
 
-    push(mx, mz);
-    push(mx + 1, mz);
-    push(mx - 1, mz);
-    push(mx, mz + 1);
-    push(mx, mz - 1);
+    if (g_map[mz][mx] !== 0) continue;
 
-    if (cand.length) break;
+    // don't place basically inside the player cell
+    const dx = mx - pMx;
+    const dz = mz - pMz;
+    if (dx * dx + dz * dz <= 2) continue;
+
+    return { mx, mz };
   }
-
-  return cand;
+  return null;
 }
-
 function addBlockInFront() {
   if (!g_camera || !g_map) return;
 
-  const f3 = new Vector3(g_camera.at.elements);
-  f3.sub(g_camera.eye);
-  f3.normalize();
-  const lookY = f3.elements[1];
+  // If you are aiming at an existing column, STACK it upward
+  const hit = rayPickNonEmptyCell() || directPickNonEmptyCell();
+  if (hit) {
+    g_map[hit.mz][hit.mx] = Math.min(4, g_map[hit.mz][hit.mx] + 1);
+    return;
+  }
 
-  const cands = getEditCandidates(false);
-  if (!cands.length) return;
-  let pick = 0;
-  if (lookY < -0.25) pick = Math.min(2, cands.length - 1);
+  // Otherwise place a new column in the first empty cell ahead
+  const empty = rayPickEmptyCell();
+  if (!empty) return;
 
-  const c = cands[pick];
-  g_map[c.mz][c.mx] = 1;
-}
-
-
-function getFrontCellStable(findNonEmpty = false) {
-  const cands = getEditCandidates(findNonEmpty);
-  return cands.length ? cands[0] : null;
+  g_map[empty.mz][empty.mx] = 1;
 }
 
 function removeBlockInFront() {
-  const cands = getEditCandidates(true);
-  if (!cands.length) return;
-  const c = cands[0];
-  g_map[c.mz][c.mx] = Math.max(0, g_map[c.mz][c.mx] - 1);
-}
-
- 
-
-
-function addBlockInFront() {
   if (!g_camera || !g_map) return;
 
-  // forward vector including Y
-  const f3 = new Vector3(g_camera.at.elements);
-  f3.sub(g_camera.eye);
-  f3.normalize();
+  const hit = rayPickNonEmptyCell();
+  if (!hit) return;
 
-  const lookY = f3.elements[1];
-
-  const cands = getEditCandidates(false);
-  if (!cands.length) return;
-  let pick = 0;
-
-  if (lookY > 0.25) {
-    pick = 0; // closest
-  } else if (lookY < -0.25) {
-    pick = Math.min(2, cands.length - 1);
-  } else {
-    pick = 0; // normal
-  }
-
-  const c = cands[pick];
-  g_map[c.mz][c.mx] = Math.min(4, g_map[c.mz][c.mx] + 1);
+  g_map[hit.mz][hit.mx] = Math.max(0, g_map[hit.mz][hit.mx] - 1);
 }
 
 function getForwardXZ() {
@@ -770,7 +770,7 @@ function addMouseControls() {
   canvas.addEventListener('mousemove', (ev) => {
     if (!g_isDragging || !g_camera) return;
     const dx = ev.clientX - g_lastMouseX;
-    const dy = ev.clientX - g_lastMouseY;
+    const dy = ev.clientY - g_lastMouseY;
 
     g_lastMouseX = ev.clientX;
     g_lastMouseY = ev.clientY;
