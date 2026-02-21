@@ -1,0 +1,1954 @@
+import Model from "./Model.js";
+import { Cube } from "./Cube.js";
+import { Terrain } from "./Terrain.js";
+let canvas, gl;
+
+// GLSL locations
+let a_Position;
+let a_UV = null;
+
+let u_FragColor, u_ModelMatrix;
+let u_ViewMatrix, u_ProjectionMatrix;
+let u_UseFog   = null;
+let u_Sampler = null;
+let u_UseTexture = null;
+let u_UVScale = null;
+
+// textures
+let g_dirtTex = null;
+let g_sandTex = null;
+let g_skyTex = null;
+let g_rockTex = null;
+let g_waterTex = null;
+
+// UI / state
+let g_globalAngle = 0;
+
+// Mouse look / shooting
+let g_isDragging = false;
+let g_lastMouseX = 0;
+let g_lastMouseY = 0;
+
+let g_isShooting = false;
+let g_lastShotTime = 0;
+
+// Turtle poke/smile
+let g_pokeStart = -1;
+let g_pokeT = 0;
+let g_pokeMode = 0;
+
+let g_smileUntil = 0;
+const SMILE_SECS = 0.8;
+
+// Turtle joints
+let g_leg1 = 0;
+let g_leg2 = 0;
+let g_fr1 = 0, g_fr2 = 0;
+let g_bl1 = 0, g_bl2 = 0;
+let g_br1 = 0, g_br2 = 0;
+let g_animate = false;
+
+// Dialogue
+let g_dialogueMode = "lore";
+let g_dialogueVisible = false;
+let g_dialogueIndex = 0;
+// ===== ASGN4 Lighting =====
+let a_Normal = null;
+
+let u_NormalMatrix = null;
+let u_CameraPos = null;
+
+let u_LightingOn = null;
+let u_ShowNormals = null;
+let u_ObjectLit = null;
+
+let u_LightPos = null;
+let u_LightColor = null;
+let u_Ambient = null;
+let u_SpecColor = null;
+let u_Shininess = null;
+
+let u_PointOn = null;
+
+let u_SpotOn = null;
+let u_SpotDir = null;
+let u_SpotCutoffCos = null;
+
+// lighting UI state
+let g_lightingOn = true;
+let g_showNormals = false;
+let g_pointOn = true;
+let g_spotOn = true;
+
+let g_lightRadius = 8.0;
+let g_lightHeight = 3.0;
+let g_lightColor = [1.0, 1.0, 1.0];
+
+let g_spotCutoffDeg = 20.0;
+
+// computed each frame
+let g_lightPos = [8.0, 3.0, 0.0];
+let g_spotDirV = [0.0, -1.0, 0.0];
+let g_bunny = null;
+// helper matrices
+let g_normalM = null;
+function hookUI() {
+  const byId = (id) => document.getElementById(id);
+
+  const btnLighting = byId("btnLighting");
+  const btnNormals  = byId("btnNormals");
+  const btnPoint    = byId("btnPoint");
+  const btnSpot     = byId("btnSpot");
+
+  const sLightRadius = byId("sLightRadius");
+  const sLightHeight = byId("sLightHeight");
+  const sLightR = byId("sLightR");
+  const sLightG = byId("sLightG");
+  const sLightB = byId("sLightB");
+  const sSpotCut = byId("sSpotCut");
+
+  const vLightRadius = byId("vLightRadius");
+  const vLightHeight = byId("vLightHeight");
+  const vLightR = byId("vLightR");
+  const vLightG = byId("vLightG");
+  const vLightB = byId("vLightB");
+  const vSpotCut = byId("vSpotCut");
+
+  function refreshButtons() {
+    if (btnLighting) btnLighting.textContent = `Lighting: ${g_lightingOn ? "ON" : "OFF"}`;
+    if (btnNormals)  btnNormals.textContent  = `Show Normals: ${g_showNormals ? "ON" : "OFF"}`;
+    if (btnPoint)    btnPoint.textContent    = `Point Light: ${g_pointOn ? "ON" : "OFF"}`;
+    if (btnSpot)     btnSpot.textContent     = `Spot Light: ${g_spotOn ? "ON" : "OFF"}`;
+  }
+
+  if (btnLighting) btnLighting.onclick = () => { g_lightingOn = !g_lightingOn; refreshButtons(); };
+  if (btnNormals)  btnNormals.onclick  = () => { g_showNormals = !g_showNormals; refreshButtons(); };
+  if (btnPoint)    btnPoint.onclick    = () => { g_pointOn = !g_pointOn; refreshButtons(); };
+  if (btnSpot)     btnSpot.onclick     = () => { g_spotOn = !g_spotOn; refreshButtons(); };
+
+  function bindSlider(sl, out, onChange) {
+    if (!sl) return;
+    const update = () => {
+      const val = +sl.value;
+      if (out) out.textContent = (sl.step && +sl.step < 1) ? val.toFixed(2) : String(val);
+      onChange(val);
+    };
+    sl.oninput = update;
+    update();
+  }
+
+  bindSlider(sLightRadius, vLightRadius, (v) => g_lightRadius = v);
+  bindSlider(sLightHeight, vLightHeight, (v) => g_lightHeight = v);
+  bindSlider(sLightR, vLightR, (v) => g_lightColor[0] = v);
+  bindSlider(sLightG, vLightG, (v) => g_lightColor[1] = v);
+  bindSlider(sLightB, vLightB, (v) => g_lightColor[2] = v);
+  bindSlider(sSpotCut, vSpotCut, (v) => g_spotCutoffDeg = v);
+
+  refreshButtons();
+}
+const g_dialogueLines = [
+  "Hello! Welcome to the world of this homie turtle.",
+  "He is currently trapped under some rocks and cannot get home.",
+  "Use your water gun (CTRL + hold mouse) to get rid of the rocks.",
+  "Shoot the gray rocks to free him!",
+  "Press SPACE to continue..."
+];
+
+// Time / perf HUD
+let g_startTime = performance.now() / 1000;
+let g_seconds = 0;
+
+let g_perfEl = null;
+let g_lastFrameMS = performance.now();
+let g_fpsSMA = 0;
+let g_msSMA = 0;
+
+let g_rocksEl = null;
+
+// Shapes
+let g_cube = null;
+let g_cyl = null;
+let g_sph = null;
+let g_hemi = null;
+let g_tri = null;
+
+// Camera
+let g_camera = null;
+
+// World / map
+const MAP_SIZE = 32;
+const CELL_SIZE = 1.0;
+
+let g_map = null;
+
+const WALL_DRAW_DIST = 6;
+const WALL_DRAW_DIST2 = WALL_DRAW_DIST * WALL_DRAW_DIST;
+
+// Player physics
+const PLAYER_RADIUS = 0.20;
+const STEP_MAX = 0.40;
+const GRAVITY_DOWN = 0.03;
+
+// Floor baseline (kept for reference)
+const FLOOR_Y = -0.35;
+const FLOOR_THICK = 0.02;
+const FLOOR_TOP_Y = FLOOR_Y + FLOOR_THICK / 2.0;
+
+// Terrain + controls
+let g_terrain = null;
+let g_terrainTex = null;
+
+// Terrains stuff
+let g_terrainBase = FLOOR_Y + 0.08;
+let g_terrainAmp  = 0.60;
+let g_terrainFreq = 0.18;
+let g_eyeHeight   = 0.45;
+globalThis.g_terrainBase = g_terrainBase;
+globalThis.g_terrainAmp  = g_terrainAmp;
+globalThis.g_terrainFreq = g_terrainFreq;
+function groundYAtWorld(x, z) {
+  if (!g_terrain) return FLOOR_TOP_Y;
+  return g_terrainBase + g_terrain.heightAt(x, z, g_terrainFreq, g_terrainAmp);
+}
+function playerEyeYAt(x, z) {
+  return groundYAtWorld(x, z) + g_eyeHeight;
+}
+
+// Colors
+const WALL_COLOR   = [0.55, 0.40, 0.22, 1.0];
+const WALL_EDGE    = [0.45, 0.33, 0.18, 1.0];
+const SKY_COLOR    = [0.55, 0.75, 1.0, 1.0];
+
+// Water shots
+let g_waterShots = [];
+const WATER_RATE = 0.08;
+const WATER_SPEED = 10.0;
+const WATER_LIFE  = 1.2;
+const WATER_SIZE  = 0.14;
+
+const WATER_UP = 2.2;
+const WATER_GRAVITY = -9.0;
+
+// Rocks / win state
+let g_smallBlocks = [];
+let g_rocksLeft = 0;
+let g_turtleGone = false;
+let g_savedShown = false;
+
+// PERF: Matrix reuse + rock buckets
+let g_tmpM0 = null;
+let g_tmpM1 = null;
+let g_tmpM2 = null;
+
+let g_rockBuckets = Object.create(null); // "mx,mz" -> blocks
+let g_tmpRockList = [];                  // reused list
+
+function ensureTmpMatrices() {
+  if (!g_tmpM0) g_tmpM0 = new Matrix4();
+  if (!g_tmpM1) g_tmpM1 = new Matrix4();
+  if (!g_tmpM2) g_tmpM2 = new Matrix4();
+}
+
+function bucketKey(mx, mz) { return mx + "," + mz; }
+
+function rebuildRockBuckets() {
+  g_rockBuckets = Object.create(null);
+  for (let i = 0; i < g_smallBlocks.length; i++) {
+    const b = g_smallBlocks[i];
+    const [mx, mz] = worldToMap(b.x, b.z);
+    const key = bucketKey(mx, mz);
+    let arr = g_rockBuckets[key];
+    if (!arr) g_rockBuckets[key] = arr = [];
+    arr.push(b);
+  }
+}
+
+function getNearbyRocks(x, z) {
+  g_tmpRockList.length = 0;
+  const [mx, mz] = worldToMap(x, z);
+
+  for (let dz = -1; dz <= 1; dz++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const key = bucketKey(mx + dx, mz + dz);
+      const arr = g_rockBuckets[key];
+      if (!arr) continue;
+      for (let i = 0; i < arr.length; i++) g_tmpRockList.push(arr[i]);
+    }
+  }
+  return g_tmpRockList;
+}
+
+// Dialogue UI
+function showDialogue(text, mode = "lore") {
+  const box = document.getElementById("dialogueBox");
+  const p = document.getElementById("dialogueText");
+  if (!box || !p) return;
+  p.innerText = text;
+  box.classList.remove("hidden");
+  g_dialogueVisible = true;
+  g_dialogueMode = mode;
+}
+
+function hideDialogue() {
+  const box = document.getElementById("dialogueBox");
+  if (!box) return;
+  box.classList.add("hidden");
+  g_dialogueVisible = false;
+}
+
+function showWelcome() {
+  showDialogue(
+    "Welcome to this world!\n" +
+    "W/A/S/D: move\n" +
+    "Mouse drag: look around\n" +
+    "CTRL + hold mouse: shoot water\n" +
+    "P: save, O: load, C: clear save\n" +
+    "L: open lore\n" +
+    "SPACE: continue / close\n" +
+    "F/R: Delete/Add Blocks",
+    "welcome"
+  );
+}
+
+function toggleDialogue() {
+  if (g_dialogueVisible) hideDialogue();
+  else {
+    g_dialogueIndex = 0;
+    showDialogue(g_dialogueLines[g_dialogueIndex], "lore");
+  }
+}
+
+function advanceDialogue() {
+  if (!g_dialogueVisible) return;
+  if (g_dialogueMode !== "lore") return;
+
+  g_dialogueIndex++;
+  if (g_dialogueIndex >= g_dialogueLines.length) {
+    hideDialogue();
+    return;
+  }
+  showDialogue(g_dialogueLines[g_dialogueIndex], "lore");
+}
+
+// Save system
+const SAVE_KEY = "turtle_world_save_v1";
+
+function showToast(msg, secs = 0.9) {
+  showDialogue(msg, "toast");
+  setTimeout(() => {
+    if (g_dialogueVisible && g_dialogueMode === "toast") hideDialogue();
+  }, secs * 1000);
+}
+
+function getGameState() {
+  const eye = g_camera?.eye?.elements || [0, 0, 0];
+  const at  = g_camera?.at?.elements  || [0, 0, 0];
+
+  return {
+    eye: [eye[0], eye[1], eye[2]],
+    at:  [at[0],  at[1],  at[2]],
+    globalAngle: g_globalAngle,
+    turtleGone: g_turtleGone,
+    savedShown: g_savedShown,
+    smallBlocks: g_smallBlocks.map(b => ({
+      x: b.x, z: b.z,
+      halfX: b.halfX, halfZ: b.halfZ,
+      bottomY: b.bottomY, topY: b.topY
+    }))
+  };
+}
+
+function applyGameState(s) {
+  if (!s || !g_camera) return;
+
+  if (Array.isArray(s.eye) && s.eye.length === 3) {
+    g_camera.eye.elements[0] = +s.eye[0];
+    g_camera.eye.elements[1] = +s.eye[1];
+    g_camera.eye.elements[2] = +s.eye[2];
+  }
+  if (Array.isArray(s.at) && s.at.length === 3) {
+    g_camera.at.elements[0] = +s.at[0];
+    g_camera.at.elements[1] = +s.at[1];
+    g_camera.at.elements[2] = +s.at[2];
+  }
+  if (typeof s.globalAngle === "number") g_globalAngle = s.globalAngle;
+
+  g_turtleGone = !!s.turtleGone;
+  g_savedShown = !!s.savedShown;
+
+  if (Array.isArray(s.smallBlocks)) {
+    g_smallBlocks = s.smallBlocks.map(b => ({
+      x: +b.x, z: +b.z,
+      halfX: +b.halfX, halfZ: +b.halfZ,
+      bottomY: +b.bottomY, topY: +b.topY
+    }));
+  }
+
+  g_rocksLeft = g_smallBlocks.length;
+  rebuildRockBuckets();
+
+  g_waterShots = [];
+  g_isShooting = false;
+  g_lastShotTime = 0;
+
+  g_camera.updateView();
+}
+
+function saveGame() {
+  try {
+    if (!g_camera) return;
+    localStorage.setItem(SAVE_KEY, JSON.stringify(getGameState()));
+    showToast("Saved");
+  } catch (e) {
+    console.warn("[SAVE] failed", e);
+    showToast("Save failed");
+  }
+}
+
+function loadGame() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) { showToast("No save found"); return false; }
+    applyGameState(JSON.parse(raw));
+    showToast("Loaded From previous save");
+    return true;
+  } catch (e) {
+    console.warn("[LOAD] failed", e);
+    showToast("Load failed");
+    return false;
+  }
+}
+
+function clearSave() {
+  try {
+    localStorage.removeItem(SAVE_KEY);
+    showToast("Cleared save");
+  } catch (e) {
+    console.warn("[CLEAR] failed", e);
+    showToast("Clear failed");
+  }
+}
+
+const VSHADER_SOURCE = `
+attribute vec4 a_Position;
+attribute vec2 a_UV;
+attribute vec3 a_Normal;
+
+uniform mat4 u_ModelMatrix;
+uniform mat4 u_ViewMatrix;
+uniform mat4 u_ProjectionMatrix;
+uniform mat4 u_NormalMatrix;
+
+varying vec2 v_UV;
+varying float v_Depth;
+
+varying vec3 v_WorldPos;
+varying vec3 v_NormalW;
+
+void main() {
+  vec4 worldPos = u_ModelMatrix * a_Position;
+  vec4 viewPos  = u_ViewMatrix * worldPos;
+
+  gl_Position = u_ProjectionMatrix * viewPos;
+
+  v_UV = a_UV;
+  v_Depth = -viewPos.z;
+
+  v_WorldPos = worldPos.xyz;
+  v_NormalW  = normalize((u_NormalMatrix * vec4(a_Normal, 0.0)).xyz);
+}
+`;
+
+const FSHADER_SOURCE = `
+precision mediump float;
+
+uniform vec4 u_FragColor;
+uniform sampler2D u_Sampler;
+uniform int u_UseTexture;
+uniform vec2 u_UVScale;
+
+uniform vec3 u_FogColor;
+uniform float u_FogNear;
+uniform float u_FogFar;
+uniform int u_UseFog;
+
+// lighting
+uniform int u_LightingOn;
+uniform int u_ShowNormals;
+uniform int u_ObjectLit;
+
+uniform vec3 u_CameraPos;
+
+uniform vec3 u_LightPos;
+uniform vec3 u_LightColor;
+uniform vec3 u_Ambient;
+uniform vec3 u_SpecColor;
+uniform float u_Shininess;
+
+uniform int u_PointOn;
+
+uniform int u_SpotOn;
+uniform vec3 u_SpotDir;
+uniform float u_SpotCutoffCos;
+
+varying vec2 v_UV;
+varying float v_Depth;
+
+varying vec3 v_WorldPos;
+varying vec3 v_NormalW;
+
+void main() {
+  vec4 base;
+  if (u_UseTexture == 1) {
+    base = texture2D(u_Sampler, v_UV * u_UVScale);
+  } else {
+    base = u_FragColor;
+  }
+
+  vec3 N = normalize(v_NormalW);
+
+  // normal debug
+  if (u_ShowNormals == 1) {
+    vec3 nn = N * 0.5 + 0.5;
+    vec3 c = nn;
+    // fog still allowed (optional)
+    if (u_UseFog == 1) {
+      float fogT = clamp((v_Depth - u_FogNear) / (u_FogFar - u_FogNear), 0.0, 1.0);
+      c = mix(c, u_FogColor, fogT);
+    }
+    gl_FragColor = vec4(c, 1.0);
+    return;
+  }
+
+  vec3 finalColor = base.rgb;
+
+  // lighting only for lit objects
+  if (u_LightingOn == 1 && u_ObjectLit == 1) {
+    vec3 ambient = u_Ambient * base.rgb;
+
+    float diff = 0.0;
+    float spec = 0.0;
+
+    if (u_PointOn == 1) {
+      vec3 L = normalize(u_LightPos - v_WorldPos);
+      vec3 V = normalize(u_CameraPos - v_WorldPos);
+      vec3 R = reflect(-L, N);
+
+      diff = max(dot(N, L), 0.0);
+
+      if (diff > 0.0) {
+        spec = pow(max(dot(R, V), 0.0), u_Shininess);
+      }
+
+      // spotlight factor
+      if (u_SpotOn == 1) {
+        vec3 lightToFrag = normalize(v_WorldPos - u_LightPos);
+        float theta = dot(lightToFrag, normalize(u_SpotDir));
+        if (theta < u_SpotCutoffCos) {
+          diff = 0.0;
+          spec = 0.0;
+        }
+      }
+    }
+
+    vec3 lit = ambient
+      + (u_LightColor * diff) * base.rgb
+      + (u_LightColor * u_SpecColor) * spec;
+
+    finalColor = lit;
+  }
+
+  // fog after lighting
+  if (u_UseFog == 1) {
+    float fogT = clamp((v_Depth - u_FogNear) / (u_FogFar - u_FogNear), 0.0, 1.0);
+    finalColor = mix(finalColor, u_FogColor, fogT);
+  }
+
+  gl_FragColor = vec4(finalColor, base.a);
+}
+`;
+
+// Map Gen
+function makeEmptyMap(size) {
+  const m = [];
+  for (let z = 0; z < size; z++) m.push(new Array(size).fill(0));
+  return m;
+}
+function randHWeighted() {
+  const r = Math.random();
+  if (r < 0.35) return 1;
+  if (r < 0.65) return 2; 
+  if (r < 0.88) return 3;
+  return 4;
+}
+
+function buildMap32() {
+  const m = makeEmptyMap(MAP_SIZE);
+
+  for (let i = 0; i < MAP_SIZE; i++) {
+    m[0][i] = 4;
+    m[MAP_SIZE - 1][i] = 4;
+    m[i][0] = 4;
+    m[i][MAP_SIZE - 1] = 4;
+  }
+
+
+  // A long column "hallway wall" with varied height
+  for (let z = 6; z < 26; z++) {
+    m[z][10] = randHWeighted();
+    if (z % 3 === 0) m[z][14] = randHWeighted();
+  }
+
+  // A rectangular "room" frame with varied height
+  for (let x = 18; x < 28; x++) {
+    m[8][x]  = randHWeighted();
+    m[16][x] = randHWeighted();
+  }
+  for (let z = 8; z < 17; z++) {
+    m[z][18] = randHWeighted();
+    m[z][27] = randHWeighted();
+  }
+
+  // doorway
+  m[12][18] = 0;
+  for (let k = 0; k < 20; k++) {
+    const x = 2 + Math.floor(Math.random() * (MAP_SIZE - 4));
+    const z = 2 + Math.floor(Math.random() * (MAP_SIZE - 4));
+    if (m[z][x] === 0) m[z][x] = randHWeighted();
+  }
+
+  return m;
+}
+
+function worldToMap(x, z) {
+  const half = MAP_SIZE / 2;
+  const mx = Math.floor(x / CELL_SIZE + half);
+  const mz = Math.floor(z / CELL_SIZE + half);
+  return [mx, mz];
+}
+
+const EDIT_RAY_MAX = 4.0;
+const EDIT_RAY_STEP = 0.12;
+const EDIT_PLACE_MIN = 2.4;
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+function inBounds(mx, mz) {
+  return (mx >= 1 && mz >= 1 && mx < MAP_SIZE - 1 && mz < MAP_SIZE - 1);
+}
+
+// march along the *full* look direction (includes Y)
+function getLookDir3D() {
+  const d = new Vector3(g_camera.at.elements);
+  d.sub(g_camera.eye);
+  d.normalize();
+  return d;
+}
+
+function rayPickNonEmptyCell(maxDist = 6.0, step = 0.04) {
+  if (!g_camera || !g_map) return null;
+
+  const ex = g_camera.eye.elements[0];
+  const ey = g_camera.eye.elements[1];
+  const ez = g_camera.eye.elements[2];
+  const d = getLookDir3D();
+
+  let best = null;
+  let bestT = 1e9;
+
+  // iterate along ray
+  for (let t = 0.25; t <= maxDist; t += step) {
+    const px = ex + d.elements[0] * t;
+    const py = ey + d.elements[1] * t;
+    const pz = ez + d.elements[2] * t;
+
+    const [mx0, mz0] = worldToMap(px, pz);
+
+    // check a small neighborhood to avoid "wrong neighbor" near edges
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const mx = mx0 + dx;
+        const mz = mz0 + dz;
+        if (!inBounds(mx, mz)) continue;
+
+        const h = g_map[mz][mx];
+        if (h <= 0) continue;
+
+        const wx = (mx - MAP_SIZE / 2) * CELL_SIZE;
+        const wz = (mz - MAP_SIZE / 2) * CELL_SIZE;
+
+        const bottom = groundYAtWorld(wx, wz);
+        const top = bottom + h * 1.0;
+
+        // must be inside the vertical span
+        if (py < bottom || py > top) continue;
+
+        // also require the ray point to be *inside the cell footprint* (tightens a lot)
+        if (px < wx - 0.5 || px > wx + 0.5) continue;
+        if (pz < wz - 0.5 || pz > wz + 0.5) continue;
+
+        // take the earliest hit along the ray
+        if (t < bestT) {
+          bestT = t;
+          best = { mx, mz };
+        }
+      }
+    }
+
+    // early exit once we found a hit very close
+    if (best && bestT < t + step * 2.0) break;
+  }
+
+  return best;
+}
+function directPickNonEmptyCell(dist = 2.2) {
+  if (!g_camera || !g_map) return null;
+  const d = getLookDir3D();
+  const px = g_camera.eye.elements[0] + d.elements[0] * dist;
+  const py = g_camera.eye.elements[1] + d.elements[1] * dist;
+  const pz = g_camera.eye.elements[2] + d.elements[2] * dist;
+
+  const [mx0, mz0] = worldToMap(px, pz);
+  for (let dz = -1; dz <= 1; dz++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const mx = mx0 + dx, mz = mz0 + dz;
+      if (!inBounds(mx, mz)) continue;
+      const h = g_map[mz][mx];
+      if (h <= 0) continue;
+
+      const wx = (mx - MAP_SIZE / 2) * CELL_SIZE;
+      const wz = (mz - MAP_SIZE / 2) * CELL_SIZE;
+      const bottom = groundYAtWorld(wx, wz);
+      const top = bottom + h * 1.0;
+
+      if (py >= bottom && py <= top &&
+          px >= wx - 0.5 && px <= wx + 0.5 &&
+          pz >= wz - 0.5 && pz <= wz + 0.5) {
+        return { mx, mz };
+      }
+    }
+  }
+  return null;
+}
+
+// Find the first EMPTY cell in front of you (for placing new columns)
+function rayPickEmptyCell(minDist = 2.4, maxDist = 6.0, step = 0.08) {
+  if (!g_camera || !g_map) return null;
+
+  const ex = g_camera.eye.elements[0];
+  const ez = g_camera.eye.elements[2];
+  const d = getLookDir3D();
+
+  const [pMx, pMz] = worldToMap(ex, ez);
+
+  let lastKey = "";
+  for (let t = minDist; t <= maxDist; t += step) {
+    const px = ex + d.elements[0] * t;
+    const pz = ez + d.elements[2] * t;
+    const [mx, mz] = worldToMap(px, pz);
+
+    if (!inBounds(mx, mz)) continue;
+
+    const key = mx + "," + mz;
+    if (key === lastKey) continue;
+    lastKey = key;
+
+    if (g_map[mz][mx] !== 0) continue;
+
+    // don't place basically inside the player cell
+    const dx = mx - pMx;
+    const dz = mz - pMz;
+    if (dx * dx + dz * dz <= 2) continue;
+
+    return { mx, mz };
+  }
+  return null;
+}
+function addBlockInFront() {
+  if (!g_camera || !g_map) return;
+
+  // If you are aiming at an existing column, STACK it upward
+  const hit = rayPickNonEmptyCell() || directPickNonEmptyCell();
+  if (hit) {
+    g_map[hit.mz][hit.mx] = Math.min(4, g_map[hit.mz][hit.mx] + 1);
+    return;
+  }
+
+  // Otherwise place a new column in the first empty cell ahead
+  const empty = rayPickEmptyCell();
+  if (!empty) return;
+
+  g_map[empty.mz][empty.mx] = 1;
+}
+
+function removeBlockInFront() {
+  if (!g_camera || !g_map) return;
+
+  const hit = rayPickNonEmptyCell();
+  if (!hit) return;
+
+  g_map[hit.mz][hit.mx] = Math.max(0, g_map[hit.mz][hit.mx] - 1);
+}
+
+function getForwardXZ() {
+  const f = new Vector3(g_camera.at.elements);
+  f.sub(g_camera.eye);
+  f.elements[1] = 0;
+  f.normalize();
+  return f;
+}
+
+function getRightXZ() {
+  const f = getForwardXZ();
+  const r = Vector3.cross(f, g_camera.up);
+  r.elements[1] = 0;
+  r.normalize();
+  return r;
+}
+
+function setNormalMatrixFromModel(modelMat) {
+  if (!u_NormalMatrix) return;
+  g_normalM.setInverseOf(modelMat);
+  g_normalM.transpose();
+  gl.uniformMatrix4fv(u_NormalMatrix, false, g_normalM.elements);
+}
+function renderCube(color, M) {
+  if (u_UseTexture) gl.uniform1i(u_UseTexture, 0);
+  if (u_UVScale) gl.uniform2f(u_UVScale, 1.0, 1.0);
+
+  if (u_ObjectLit) gl.uniform1i(u_ObjectLit, 1);
+  setNormalMatrixFromModel(M);
+
+  g_cube.color = color;
+  g_cube.matrix.set(M);
+
+  g_cube.render(gl, {
+    a_Position, a_UV, a_Normal,
+    u_ModelMatrix, u_FragColor
+  });
+}
+function renderTexturedCube(M, texture, uvScaleX = 1.0, uvScaleY = 1.0) {
+  if (!texture || !u_UseTexture || !u_UVScale || !u_Sampler || a_UV === null || a_UV < 0) {
+    renderCube(WALL_COLOR, M);
+    return;
+  }
+
+  gl.uniform1i(u_UseTexture, 1);
+  gl.uniform2f(u_UVScale, uvScaleX, uvScaleY);
+
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.uniform1i(u_Sampler, 0);
+
+  if (u_ObjectLit) gl.uniform1i(u_ObjectLit, 1);
+  setNormalMatrixFromModel(M);
+
+  g_cube.color = [1, 1, 1, 1];
+  g_cube.matrix.set(M);
+  g_cube.render(gl, {
+    a_Position, a_UV, a_Normal,
+    u_ModelMatrix, u_FragColor
+  });
+
+  gl.bindTexture(gl.TEXTURE_2D, null);
+  gl.uniform1i(u_UseTexture, 0);
+  gl.uniform2f(u_UVScale, 1.0, 1.0);
+}
+
+function renderCylinder(color, M, segments = null) {
+  if (!g_cyl) return;
+  if (segments !== null) g_cyl.segments = segments;
+
+  if (u_UseTexture) gl.uniform1i(u_UseTexture, 0);
+  if (u_ObjectLit) gl.uniform1i(u_ObjectLit, 1);
+  setNormalMatrixFromModel(M);
+
+  g_cyl.color = color;
+  g_cyl.matrix.set(M);
+  g_cyl.render();
+}
+
+function renderSphere(color, M, sCount = 10, size = 5.7) {
+  if (!g_sph) return;
+
+  if (u_UseTexture) gl.uniform1i(u_UseTexture, 0);
+  if (u_ObjectLit) gl.uniform1i(u_ObjectLit, 1);
+  setNormalMatrixFromModel(M);
+
+  g_sph.color = color;
+  g_sph.sCount = sCount;
+  g_sph.size = size;
+  g_sph.matrix.set(M);
+  g_sph.render();
+}
+
+function renderHemisphere(color, M, latBands = 12, lonBands = 30, size = 22.0) {
+  if (!g_hemi) return;
+
+  if (u_UseTexture) gl.uniform1i(u_UseTexture, 0);
+  if (u_ObjectLit) gl.uniform1i(u_ObjectLit, 1);
+  setNormalMatrixFromModel(M);
+
+  g_hemi.color = color;
+  g_hemi.latBands = latBands;
+  g_hemi.lonBands = lonBands;
+  g_hemi.size = size;
+  g_hemi.matrix.set(M);
+  g_hemi.render();
+}
+
+function renderTriPrism(color, M) {
+  if (!g_tri) return;
+
+  if (u_UseTexture) gl.uniform1i(u_UseTexture, 0);
+  if (u_ObjectLit) gl.uniform1i(u_ObjectLit, 1);
+  setNormalMatrixFromModel(M);
+
+  g_tri.color = color;
+  g_tri.matrix.set(M);
+  g_tri.render();
+}
+function updateLightParams() {
+  // orbit around origin
+  const t = g_seconds * 0.8;
+  const lx = Math.cos(t) * g_lightRadius;
+  const lz = Math.sin(t) * g_lightRadius;
+  const ly = g_lightHeight;
+
+  g_lightPos[0] = lx;
+  g_lightPos[1] = ly;
+  g_lightPos[2] = lz;
+
+  // spotlight aims at turtle area (near origin on terrain)
+  const ty = groundYAtWorld(0, 0) + 0.20;
+  let dx = 0.0 - lx;
+  let dy = ty  - ly;
+  let dz = 0.0 - lz;
+  const mag = Math.sqrt(dx*dx + dy*dy + dz*dz) || 1.0;
+  dx /= mag; dy /= mag; dz /= mag;
+
+  g_spotDirV[0] = dx;
+  g_spotDirV[1] = dy;
+  g_spotDirV[2] = dz;
+}
+
+function isSolidAtWorld(x, z, y) {
+  // walls
+  {
+    const [mx, mz] = worldToMap(x, z);
+    if (mx < 0 || mz < 0 || mx >= MAP_SIZE || mz >= MAP_SIZE) return true;
+
+    const h = g_map[mz][mx];
+    if (h > 0) {
+      const wx = (mx - MAP_SIZE / 2) * CELL_SIZE;
+      const wz = (mz - MAP_SIZE / 2) * CELL_SIZE;
+      const wallBottom = groundYAtWorld(wx, wz);
+      const wallTop = wallBottom + h * 1.0;
+      if (y >= wallBottom && y <= wallTop) return true;
+    }
+  }
+
+  // rocks
+  const rocks = getNearbyRocks(x, z);
+  for (let i = 0; i < rocks.length; i++) {
+    const b = rocks[i];
+    if (x >= b.x - b.halfX && x <= b.x + b.halfX &&
+        z >= b.z - b.halfZ && z <= b.z + b.halfZ &&
+        y >= b.bottomY     && y <= b.topY) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function canStandAt(x, z, y) {
+  const R = PLAYER_RADIUS;
+  return !(
+    isSolidAtWorld(x + R, z + R, y) ||
+    isSolidAtWorld(x + R, z - R, y) ||
+    isSolidAtWorld(x - R, z + R, y) ||
+    isSolidAtWorld(x - R, z - R, y)
+  );
+}
+
+function tryMove(dx, dz) {
+  const nx = g_camera.eye.elements[0] + dx;
+  const nz = g_camera.eye.elements[2] + dz;
+  const ey = g_camera.eye.elements[1];
+
+  if (canStandAt(nx, nz, ey)) {
+    g_camera.eye.elements[0] = nx;
+    g_camera.eye.elements[2] = nz;
+    g_camera.at.elements[0] += dx;
+    g_camera.at.elements[2] += dz;
+    g_camera.updateView();
+    return;
+  }
+
+  const stepY = ey + STEP_MAX;
+  if (canStandAt(nx, nz, stepY)) {
+    g_camera.eye.elements[0] = nx;
+    g_camera.eye.elements[2] = nz;
+    g_camera.at.elements[0] += dx;
+    g_camera.at.elements[2] += dz;
+
+    g_camera.eye.elements[1] = stepY;
+    g_camera.at.elements[1] += STEP_MAX;
+
+    g_camera.updateView();
+    return;
+  }
+}
+
+function moveForward() {
+  const f = getForwardXZ();
+  const step = g_camera.moveStep || 0.2;
+  tryMove(f.elements[0] * step, f.elements[2] * step);
+}
+function moveBack() {
+  const f = getForwardXZ();
+  const step = g_camera.moveStep || 0.2;
+  tryMove(-f.elements[0] * step, -f.elements[2] * step);
+}
+function moveLeft() {
+  const r = getRightXZ();
+  const step = g_camera.moveStep || 0.2;
+  tryMove(-r.elements[0] * step, -r.elements[2] * step);
+}
+function moveRight() {
+  const r = getRightXZ();
+  const step = g_camera.moveStep || 0.2;
+  tryMove(r.elements[0] * step, r.elements[2] * step);
+}
+
+// Input
+function addMouseControls() {
+  canvas.addEventListener('mousedown', (ev) => {
+    if (ev.ctrlKey) {
+      g_isShooting = true;
+      g_isDragging = false;
+      return;
+    }
+    g_isDragging = true;
+    g_lastMouseX = ev.clientX;
+    g_lastMouseY = ev.clientY;
+  });
+
+  canvas.addEventListener('mousemove', (ev) => {
+    if (!g_isDragging || !g_camera) return;
+    const dx = ev.clientX - g_lastMouseX;
+    const dy = ev.clientY - g_lastMouseY;
+
+    g_lastMouseX = ev.clientX;
+    g_lastMouseY = ev.clientY;
+
+    const sensitivity = 0.20;
+    g_camera.panMouse(dx * sensitivity);
+    void dy;
+  });
+
+  window.addEventListener('mouseup', () => {
+    g_isDragging = false;
+    g_isShooting = false;
+  });
+
+  canvas.addEventListener('wheel', (ev) => ev.preventDefault(), { passive: false });
+}
+
+function addKeyboardControls() {
+  document.addEventListener('keydown', (ev) => {
+    const k = ev.key.toLowerCase();
+
+    if (k === 'l') { toggleDialogue(); return; }
+
+    if (ev.code === 'Space' && g_dialogueVisible) {
+      ev.preventDefault();
+      if (g_dialogueMode === "lore") advanceDialogue();
+      else hideDialogue();
+      return;
+    }
+
+    if (k === 'p') { saveGame(); return; }
+    if (k === 'o') { loadGame(); return; }
+    if (k === 'c') { clearSave(); return; }
+
+    if (!g_camera) return;
+
+    if (k === 'w') moveForward();
+    else if (k === 's') moveBack();
+    else if (k === 'a') moveLeft();
+    else if (k === 'd') moveRight();
+    else if (k === 'q') g_camera.panRight();
+    else if (k === 'e') g_camera.panLeft();
+    else if (ev.key === 'ArrowUp') moveForward();
+    else if (ev.key === 'ArrowDown') moveBack();
+    else if (ev.key === 'ArrowLeft') moveLeft();
+    else if (ev.key === 'ArrowRight') moveRight();
+    else if (k === 'r') removeBlockInFront();
+    else if (k === 'f') addBlockInFront();
+
+
+  });
+}
+
+
+function cellIsWallAtWorld(x, z) {
+  if (!g_map) return false;
+  const [mx, mz] = worldToMap(x, z);
+  if (mx < 0 || mz < 0 || mx >= MAP_SIZE || mz >= MAP_SIZE) return true;
+  return g_map[mz][mx] > 0;
+}
+
+function buildSmallBlocks() {
+  const half = 0.18;
+  const blocks = [];
+  const WANT = 10;
+
+  let i = 0, attempts = 0;
+  const MAX_ATTEMPTS = 200;
+
+  while (blocks.length < WANT && attempts < MAX_ATTEMPTS) {
+    const x = -3 + (i % 6);
+    const z = -2 + Math.floor(i / 6);
+
+    if (!cellIsWallAtWorld(x, z)) {
+      const bottomY = groundYAtWorld(x, z);
+      const topY = bottomY + half * 2.0;
+      blocks.push({
+        x, z,
+        halfX: half,
+        halfZ: half,
+        bottomY,
+        topY
+      });
+    }
+
+    i++;
+    attempts++;
+  }
+  return blocks;
+}
+
+function isPowerOf2(v) { return (v & (v - 1)) === 0; }
+
+function initTexture(imgSrc, onReady) {
+  const tex = gl.createTexture();
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+
+  img.onload = () => {
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+
+    const pot = isPowerOf2(img.width) && isPowerOf2(img.height);
+    if (pot) {
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    } else {
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    }
+
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    onReady(tex);
+  };
+
+  img.onerror = (e) => console.error("[Texture FAIL]", imgSrc, e);
+  img.src = imgSrc + "?v=" + Date.now();
+}
+
+// Water shots
+function spawnWaterShot() {
+  if (!g_camera) return;
+
+  const f = getForwardXZ();
+  const ex = g_camera.eye.elements[0];
+  const ez = g_camera.eye.elements[2];
+
+  const sx = ex + f.elements[0] * 0.55;
+  const sz = ez + f.elements[2] * 0.55;
+  const sy = g_camera.eye.elements[1] - 0.15;
+
+  g_waterShots.push({
+    x: sx, y: sy, z: sz,
+    vx: f.elements[0] * WATER_SPEED,
+    vy: WATER_UP,
+    vz: f.elements[2] * WATER_SPEED,
+    life: WATER_LIFE
+  });
+}
+
+function pointHitsBlock(px, py, pz, b) {
+  return (
+    px >= b.x - b.halfX && px <= b.x + b.halfX &&
+    pz >= b.z - b.halfZ && pz <= b.z + b.halfZ &&
+    py >= b.bottomY     && py <= b.topY
+  );
+}
+
+function updateWaterShots(dt) {
+  if (g_isShooting) {
+    g_lastShotTime += dt;
+    while (g_lastShotTime >= WATER_RATE) {
+      g_lastShotTime -= WATER_RATE;
+      spawnWaterShot();
+    }
+  } else {
+    g_lastShotTime = 0;
+  }
+
+  for (let i = g_waterShots.length - 1; i >= 0; i--) {
+    const s = g_waterShots[i];
+
+    s.vy += WATER_GRAVITY * dt;
+    s.x += s.vx * dt;
+    s.y += s.vy * dt;
+    s.z += s.vz * dt;
+
+    s.life -= dt;
+    if (s.life <= 0) { g_waterShots.splice(i, 1); continue; }
+
+    const ground = groundYAtWorld(s.x, s.z);
+    if (s.y <= ground + 0.02) { g_waterShots.splice(i, 1); continue; }
+
+    const near = getNearbyRocks(s.x, s.z);
+
+    let hitBlock = null;
+    for (let j = 0; j < near.length; j++) {
+      if (pointHitsBlock(s.x, s.y, s.z, near[j])) { hitBlock = near[j]; break; }
+    }
+
+    if (hitBlock) {
+      const idx = g_smallBlocks.indexOf(hitBlock);
+      if (idx !== -1) g_smallBlocks.splice(idx, 1);
+      rebuildRockBuckets();
+
+      g_rocksLeft = g_smallBlocks.length;
+      g_smileUntil = g_seconds + SMILE_SECS;
+
+      g_waterShots.splice(i, 1);
+
+      if (!g_savedShown && g_rocksLeft === 0) {
+        g_savedShown = true;
+        g_turtleGone = true;
+        showDialogue(
+          "Congratulations! You've rescued the turtle! Feel free to stay in this world longer or leave.",
+          "win"
+        );
+      }
+    }
+  }
+}
+
+function drawWaterShots(world) {
+  ensureTmpMatrices();
+  const M = g_tmpM0;
+
+  for (let i = 0; i < g_waterShots.length; i++) {
+    const s = g_waterShots[i];
+    M.set(world);
+    M.translate(s.x, s.y, s.z);
+    M.scale(WATER_SIZE, WATER_SIZE, WATER_SIZE);
+    renderTexturedCube(M, g_waterTex, 1.0, 1.0);
+  }
+}
+function drawLightMarker(world) {
+  ensureTmpMatrices();
+  const M = g_tmpM2;
+  M.set(world);
+  M.translate(g_lightPos[0], g_lightPos[1], g_lightPos[2]);
+  M.scale(0.25, 0.25, 0.25);
+  renderCube([1, 1, 0, 1], M);
+}
+
+// ======================= MAIN / TICK =======================
+function main() {
+  canvas = document.getElementById('webgl');
+  gl = canvas.getContext('webgl');
+  if (!gl) return;
+
+  globalThis.gl = gl;  // do this AFTER getContext
+  if (!gl) return;
+
+  gl.enable(gl.DEPTH_TEST);
+  if (!initShaders(gl, VSHADER_SOURCE, FSHADER_SOURCE)) return;
+
+  a_Position = gl.getAttribLocation(gl.program, 'a_Position');
+  a_UV = gl.getAttribLocation(gl.program, 'a_UV');
+  a_Normal = gl.getAttribLocation(gl.program, 'a_Normal');
+
+  u_FragColor = gl.getUniformLocation(gl.program, 'u_FragColor');
+  u_ModelMatrix = gl.getUniformLocation(gl.program, 'u_ModelMatrix');
+  u_ViewMatrix = gl.getUniformLocation(gl.program, 'u_ViewMatrix');
+  u_ProjectionMatrix = gl.getUniformLocation(gl.program, 'u_ProjectionMatrix');
+  // Make shader locations visible to the old (non-module) shape files
+  globalThis.a_Position = a_Position;
+  globalThis.a_UV = a_UV;
+  globalThis.a_Normal = a_Normal;
+
+  globalThis.u_FragColor = u_FragColor;
+  globalThis.u_ModelMatrix = u_ModelMatrix;
+  globalThis.u_NormalMatrix = u_NormalMatrix;
+
+  globalThis.u_Sampler = u_Sampler;
+  globalThis.u_UseTexture = u_UseTexture;
+  globalThis.u_UVScale = u_UVScale;
+  u_Sampler = gl.getUniformLocation(gl.program, 'u_Sampler');
+  u_UseTexture = gl.getUniformLocation(gl.program, 'u_UseTexture');
+  u_UVScale = gl.getUniformLocation(gl.program, 'u_UVScale');
+  
+  // fog
+  const u_FogColor = gl.getUniformLocation(gl.program, 'u_FogColor');
+  const u_FogNear  = gl.getUniformLocation(gl.program, 'u_FogNear');
+  const u_FogFar   = gl.getUniformLocation(gl.program, 'u_FogFar');
+  u_UseFog   = gl.getUniformLocation(gl.program, 'u_UseFog');
+
+  // lighting uniforms
+  u_NormalMatrix = gl.getUniformLocation(gl.program, 'u_NormalMatrix');
+  u_CameraPos = gl.getUniformLocation(gl.program, 'u_CameraPos');
+
+  u_LightingOn = gl.getUniformLocation(gl.program, 'u_LightingOn');
+  u_ShowNormals = gl.getUniformLocation(gl.program, 'u_ShowNormals');
+
+  u_LightPos = gl.getUniformLocation(gl.program, 'u_LightPos');
+  u_LightColor = gl.getUniformLocation(gl.program, 'u_LightColor');
+
+  u_PointOn = gl.getUniformLocation(gl.program, 'u_PointOn');
+
+  u_SpotOn = gl.getUniformLocation(gl.program, 'u_SpotOn');
+  u_SpotDir = gl.getUniformLocation(gl.program, 'u_SpotDir');
+  u_SpotCutoffCos = gl.getUniformLocation(gl.program, 'u_SpotCutoffCos');
+
+  u_Ambient   = gl.getUniformLocation(gl.program, 'u_Ambient');
+  u_SpecColor = gl.getUniformLocation(gl.program, 'u_SpecColor');
+  u_Shininess = gl.getUniformLocation(gl.program, 'u_Shininess');
+  u_ObjectLit = gl.getUniformLocation(gl.program, 'u_ObjectLit');
+  if (u_ObjectLit) gl.uniform1i(u_ObjectLit, 1);
+  gl.uniform3f(u_Ambient,   0.25, 0.25, 0.25);
+  gl.uniform3f(u_SpecColor, 0.45, 0.45, 0.45);
+  gl.uniform1f(u_Shininess, 32.0);
+
+  // defaults
+  if (u_UseTexture) gl.uniform1i(u_UseTexture, 0);
+  if (u_UVScale) gl.uniform2f(u_UVScale, 1.0, 1.0);
+
+  if (u_LightingOn) gl.uniform1i(u_LightingOn, 1);
+  if (u_ShowNormals) gl.uniform1i(u_ShowNormals, 0);
+  if (u_PointOn) gl.uniform1i(u_PointOn, 1);
+  if (u_SpotOn) gl.uniform1i(u_SpotOn, 1);
+
+  g_normalM = new Matrix4();
+
+  gl.clearColor(SKY_COLOR[0], SKY_COLOR[1], SKY_COLOR[2], 1.0);
+
+  // fog setup
+  gl.uniform3f(u_FogColor, SKY_COLOR[0], SKY_COLOR[1], SKY_COLOR[2]);
+  gl.uniform1f(u_FogNear, 8.0);
+  gl.uniform1f(u_FogFar,  22.0);
+
+  g_perfEl = document.getElementById('perf');
+  g_rocksEl = document.getElementById('rocksHUD');
+
+  g_cube = new Cube();
+  g_cyl = new Cylinder();
+  g_sph = new Sphere();
+  g_hemi = new Hemisphere();
+  if (typeof TriPrism !== 'undefined') g_tri = new TriPrism();
+  else if (typeof TriangularPrism !== 'undefined') g_tri = new TriangularPrism();
+
+  g_map = buildMap32();
+
+  // Terrain
+  g_terrain = new Terrain(140, MAP_SIZE * CELL_SIZE + 6);
+  g_terrain.base = g_terrainBase;
+  g_terrain.amp  = g_terrainAmp;
+  g_terrain.freq = g_terrainFreq;
+  g_terrain.init(gl);
+
+  g_smallBlocks = buildSmallBlocks();
+  g_rocksLeft = g_smallBlocks.length;
+  ensureTmpMatrices();
+  rebuildRockBuckets();
+
+  g_turtleGone = false;
+  g_savedShown = false;
+
+  initTexture('mydirt.png', (t) => { g_dirtTex = t; });
+  initTexture('sand1.png', (t) => { g_sandTex = t; g_terrainTex = t; });
+  initTexture('sky4.png',  (t) => { g_skyTex  = t; });
+  initTexture('rock.png',  (t) => { g_rockTex = t; });
+  initTexture('water.png', (t) => { g_waterTex = t; });
+
+  g_camera = new Camera();
+  g_camera.setPerspective(50, canvas.width / canvas.height, 0.1, 2000);
+
+  // Place camera on terrain
+  const ex = g_camera.eye.elements[0];
+  const ez = g_camera.eye.elements[2];
+  const ey = playerEyeYAt(ex, ez);
+
+  g_camera.eye.elements[1] = ey;
+  g_camera.at.elements[1]  = ey;
+  g_camera.updateView();
+  // ===== Load Bunny OBJ =====
+  g_bunny = new Model(gl, "bunny.obj");
+
+  // optional: wait for it to finish loading
+  g_bunny.ready.then(() => {
+    console.log("Bunny loaded!");
+  }).catch(err => {
+    console.error("Bunny failed to load:", err);
+  });
+  hookUI();
+  addMouseControls();
+  addKeyboardControls();
+  showWelcome();
+  requestAnimationFrame(tick);
+}
+
+function tick() {
+  const nowMS = performance.now();
+  const dtMS = nowMS - g_lastFrameMS;
+  g_lastFrameMS = nowMS;
+  const dt = dtMS / 1000.0;
+
+  updateWaterShots(dt);
+
+  const fps = 1000.0 / Math.max(dtMS, 0.0001);
+  const alpha = 0.08;
+  g_fpsSMA = (g_fpsSMA === 0) ? fps : (g_fpsSMA * (1 - alpha) + fps * alpha);
+  g_msSMA = (g_msSMA === 0) ? dtMS : (g_msSMA * (1 - alpha) + dtMS * alpha);
+
+  if (g_perfEl && (!tick._hudLast || nowMS - tick._hudLast > 250)) {
+    tick._hudLast = nowMS;
+    g_perfEl.innerHTML = `FPS: ${g_fpsSMA.toFixed(1)}<br>ms: ${g_msSMA.toFixed(1)}`;
+  }
+  if (g_rocksEl && (!tick._rocksLast || nowMS - tick._rocksLast > 120)) {
+    tick._rocksLast = nowMS;
+    g_rocksEl.innerText = "Rocks left: " + g_rocksLeft;
+  }
+
+  g_seconds = nowMS / 1000 - g_startTime;
+  g_pokeMode = (g_seconds < g_smileUntil) ? 1 : 0;
+
+  if (g_pokeStart >= 0) {
+    const t = (nowMS / 1000 - g_pokeStart) / 1.2;
+    g_pokeT = Math.min(Math.max(t, 0), 1);
+    if (t >= 1) { g_pokeStart = -1; g_pokeT = 0; }
+  } else {
+    g_pokeT = 0;
+  }
+
+  if (g_animate) updateAnimationAngles();
+
+  // gravity/snap
+  if (g_camera) {
+    const x = g_camera.eye.elements[0];
+    const z = g_camera.eye.elements[2];
+
+    const targetEyeY = playerEyeYAt(x, z);
+    const y = g_camera.eye.elements[1];
+
+    if (y > targetEyeY) {
+      const ny = Math.max(targetEyeY, y - GRAVITY_DOWN);
+      const dy = ny - y;
+      g_camera.eye.elements[1] = ny;
+      g_camera.at.elements[1] += dy;
+      g_camera.updateView();
+    } else if (y < targetEyeY) {
+      const ny = Math.min(targetEyeY, y + STEP_MAX);
+      const dy = ny - y;
+      g_camera.eye.elements[1] = ny;
+      g_camera.at.elements[1] += dy;
+      g_camera.updateView();
+    }
+  }
+
+  // update lights
+  updateLightParams();
+
+  renderScene();
+  requestAnimationFrame(tick);
+}
+// Animation (kept as-is)
+function updateAnimationAngles() {
+  const a = Math.sin(g_seconds * 2.0);
+  const b = Math.sin(g_seconds * 2.0 + Math.PI);
+  g_leg1 = 25 * a;
+  g_leg2 = 18 * Math.abs(a);
+  g_fr1 = 25 * b;
+  g_fr2 = 18 * Math.abs(b);
+  g_bl1 = 18 * b;
+  g_bl2 = 14 * Math.abs(b);
+  g_br1 = 18 * a;
+  g_br2 = 14 * Math.abs(a);
+}
+
+function applyLightingUniformsPerFrame() {
+  if (!gl) return;
+
+  // toggles
+  if (u_LightingOn)  gl.uniform1i(u_LightingOn,  g_lightingOn ? 1 : 0);
+  if (u_ShowNormals) gl.uniform1i(u_ShowNormals, g_showNormals ? 1 : 0);
+  if (u_PointOn)     gl.uniform1i(u_PointOn,     g_pointOn ? 1 : 0);
+  if (u_SpotOn)      gl.uniform1i(u_SpotOn,      g_spotOn ? 1 : 0);
+
+  // camera position
+  if (u_CameraPos && g_camera) {
+    const e = g_camera.eye.elements;
+    gl.uniform3f(u_CameraPos, e[0], e[1], e[2]);
+  }
+
+  // light position + color
+  if (u_LightPos)   gl.uniform3f(u_LightPos,   g_lightPos[0], g_lightPos[1], g_lightPos[2]);
+  if (u_LightColor) gl.uniform3f(u_LightColor, g_lightColor[0], g_lightColor[1], g_lightColor[2]);
+
+  // spotlight direction + cutoff
+  if (u_SpotDir) gl.uniform3f(u_SpotDir, g_spotDirV[0], g_spotDirV[1], g_spotDirV[2]);
+  if (u_SpotCutoffCos) {
+    const rad = g_spotCutoffDeg * Math.PI / 180.0;
+    gl.uniform1f(u_SpotCutoffCos, Math.cos(rad));
+  }
+}
+
+// ===== Scene render =====
+function renderScene() {
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+  gl.uniformMatrix4fv(u_ProjectionMatrix, false, g_camera.projMat.elements);
+  gl.uniformMatrix4fv(u_ViewMatrix, false, g_camera.viewMat.elements);
+  applyLightingUniformsPerFrame();
+  const world = new Matrix4();
+  world.rotate(g_globalAngle, 0, 1, 0);
+
+  drawWorld(world);
+  {
+    const ty = groundYAtWorld(1.5, 1.5) + 0.3;
+    const SM = new Matrix4(world);
+    SM.translate(1.5, ty, 1.5);
+    SM.scale(0.6, 0.6, 0.6);
+    renderSphere([0.9, 0.2, 0.2, 1.0], SM, 18, 6.0); // red sphere
+  }
+  // ===== Draw Bunny OBJ =====
+  if (g_bunny && g_bunny.isFullyLoaded) {
+    const M = new Matrix4(world);
+
+    // position it somewhere visible
+    M.translate(2, groundYAtWorld(2, 0) + 0.2, 0);
+
+    // scale it (IMPORTANT: bunny is usually huge)
+    M.scale(0.1, 0.1, 0.1);
+
+    g_bunny.matrix.set(M);
+
+    g_bunny.render(gl, {
+      a_Position,
+      a_Normal,
+      u_ModelMatrix,
+      u_NormalMatrix,
+      u_FragColor
+    });
+  }
+  if (!g_turtleGone) {
+    // Put turtle on terrain near origin
+    const ty = groundYAtWorld(0, 0) + 0.20;
+
+    const turtleWorld = new Matrix4(world);
+    turtleWorld.translate(0, ty, 0);
+    turtleWorld.scale(0.35, 0.35, 0.35);
+    turtleWorld.translate(-0.15, -0.05, 0);
+    drawTurtle(turtleWorld);
+  }
+}
+//Draw World
+function drawWorld(world) {
+  ensureTmpMatrices();
+  const S = g_tmpM0;
+  const M = g_tmpM1;
+  const M2 = g_tmpM2;
+
+  gl.disable(gl.DEPTH_TEST);
+  gl.uniform1i(u_UseFog, 0); 
+  if (u_ObjectLit) gl.uniform1i(u_ObjectLit, 0);
+  // Sky
+  S.set(world);
+  S.translate(g_camera.eye.elements[0], 0, g_camera.eye.elements[2]);
+  S.scale(80, 80, 80);
+  if (g_skyTex) renderTexturedCube(S, g_skyTex, 1.0, 1.0);
+  else renderCube(SKY_COLOR, S);
+
+  gl.enable(gl.DEPTH_TEST);
+  gl.uniform1i(u_UseFog, 1);
+  // Terrain
+  if (g_terrain) {
+    g_terrain.render(gl, world, g_terrainTex || g_sandTex, {
+      a_Position, a_UV, a_Normal,
+      u_ModelMatrix, u_FragColor,
+      u_UseTexture, u_UVScale, u_Sampler
+    });
+  } else {
+    S.set(world);
+    S.translate(0, FLOOR_Y, 0);
+    const floorSize = MAP_SIZE * CELL_SIZE + 2;
+    S.scale(floorSize, FLOOR_THICK, floorSize);
+    renderTexturedCube(S, g_sandTex, 16.0, 16.0);
+  }
+
+  const half = MAP_SIZE / 2;
+  const ex = g_camera.eye.elements[0];
+  const ez = g_camera.eye.elements[2];
+
+  // Walls
+  for (let z = 0; z < MAP_SIZE; z++) {
+    for (let x = 0; x < MAP_SIZE; x++) {
+      const h = g_map[z][x];
+      if (h <= 0) continue;
+
+      const wx = (x - half) * CELL_SIZE;
+      const wz = (z - half) * CELL_SIZE;
+
+      const dx = wx - ex;
+      const dz = wz - ez;
+      const d2 = dx * dx + dz * dz;
+      if (d2 > WALL_DRAW_DIST2) continue;
+
+      for (let y = 0; y < h; y++) {
+        const groundY = groundYAtWorld(wx, wz);
+        const wy = groundY + 0.5 + y * 1.0;
+
+        M.set(world);
+        M.translate(wx, wy, wz);
+        renderTexturedCube(M, g_dirtTex);
+
+        if (d2 < 36) {
+          M2.set(world);
+          M2.translate(wx, wy + 0.51, wz);
+          M2.scale(1.02, 0.05, 1.02);
+          renderCube(WALL_EDGE, M2);
+        }
+      }
+    }
+  }
+
+  // Rocks
+  for (let i = 0; i < g_smallBlocks.length; i++) {
+    const b = g_smallBlocks[i];
+    const cy = (b.bottomY + b.topY) * 0.5;
+
+    M.set(world);
+    M.translate(b.x, cy, b.z);
+    M.scale(b.halfX * 2.0, (b.topY - b.bottomY), b.halfZ * 2.0);
+    renderTexturedCube(M, g_rockTex, 1.0, 1.0);
+  }
+
+  // Water shots
+  drawWaterShots(world);
+}
+
+//My previous turtle code
+
+function drawScutePads(world) {
+  const padC = [0.36, 0.26, 0.12, 1.0];
+
+  function pad(x, y, z, sx, sy, sz, rotX = 0, rotZ = 0, rotY = 0) {
+    const M = new Matrix4(world);
+    M.translate(x, y, z);
+    if (rotY !== 0) M.rotate(rotY, 0, 1, 0);
+    if (rotX !== 0) M.rotate(rotX, 1, 0, 0);
+    if (rotZ !== 0) M.rotate(rotZ, 0, 0, 1);
+    M.scale(sx, sy, sz);
+    renderHemisphere(padC, M, 12, 30, 21.50);
+  }
+
+  const y = 0.59;
+  const cx = 0.08;
+  const cz = 0.02;
+
+  pad(cx, y, cz, 0.70, 0.6, 0.70, 0, 0);
+  pad(cx, y, cz - 0.5, 0.7, 0.26, 0.7, -25, 0);
+  pad(cx, y, cz + 0.4, 0.7, 0.26, 0.7,  25, 0);
+  pad(cx - 0.4, y, cz, 0.70, 0.26, 0.70, 0,  25);
+  pad(cx + 0.45, y, cz, 0.70, 0.26, 0.70, 0, -25);
+}
+
+function drawTurtle(world) {
+  const shellDark = [0.40, 0.30, 0.14, 1];
+  const shellMid = [0.52, 0.40, 0.20, 1];
+  const rimLight = [0.70, 0.78, 0.58, 1];
+
+  const bodyGreen = [0.25, 0.70, 0.25, 1];
+  const bodyDark = [0.18, 0.55, 0.18, 1];
+  const claw = [0.86, 0.86, 0.82, 1];
+
+  let M = new Matrix4(world);
+  M.translate(0.05, -0.12, 0);
+  M.scale(1.10, 0.18, 1.15);
+  renderCube(bodyDark, M);
+
+  M = new Matrix4(world);
+  M.translate(0.08, 0.02, 0.00);
+  M.scale(1.70, 0.10, 1.85);
+  M.translate(0, -0.5, 0);
+  renderCylinder(rimLight, M, 40);
+
+  M = new Matrix4(world);
+  M.translate(0.08, 0.10, 0.00);
+  M.scale(1.62, 0.26, 1.75);
+  M.translate(0, -0.5, 0);
+  renderCylinder(shellDark, M, 40);
+
+  const domeC = [0.62, 0.48, 0.26, 1];
+  const domeM = new Matrix4(world);
+  domeM.translate(0.08, 0.18, 0.00);
+  domeM.scale(1.55, 1.10, 1.65);
+  renderHemisphere(domeC, domeM, 12, 30, 21.50);
+
+  const topM = new Matrix4(world);
+  topM.translate(0.08, 0.34, 0.00);
+  topM.scale(1.10, 0.80, 1.18);
+  renderHemisphere(shellMid, topM, 12, 30, 19.0);
+
+  drawScutePads(world);
+  drawRealHead(world, bodyGreen);
+
+  M = new Matrix4(world);
+  M.translate(0.18, -0.16, -0.98);
+  M.rotate(180, 0, 1, 0);
+  M.rotate(-10, 1, 0, 0);
+  M.scale(0.32, 0.22, 0.45);
+  M.translate(-0.5, 0.0, -0.5);
+  renderTriPrism(bodyGreen, M);
+
+  drawLegChain(world, {
+    hip: [-0.42, -0.12, 0.56],
+    thighAngle: g_leg1,
+    calfAngle: g_leg2,
+    bodyColor: bodyGreen,
+    clawColor: claw,
+    toeForward: true
+  });
+
+  drawLegChain(world, {
+    hip: [0.58, -0.12, 0.56],
+    thighAngle: g_fr1,
+    calfAngle: g_fr2,
+    bodyColor: bodyGreen,
+    clawColor: claw,
+    toeForward: true
+  });
+
+  drawLegChain(world, {
+    hip: [-0.52, -0.12, -0.60],
+    thighAngle: g_bl1,
+    calfAngle: g_bl2,
+    bodyColor: bodyGreen,
+    clawColor: claw,
+    toeForward: false
+  });
+
+  drawLegChain(world, {
+    hip: [0.62, -0.12, -0.60],
+    thighAngle: g_br1,
+    calfAngle: g_br2,
+    bodyColor: bodyGreen,
+    clawColor: claw,
+    toeForward: false
+  });
+}
+
+function drawLegChain(world, { hip, thighAngle, calfAngle, bodyColor, clawColor, toeForward }) {
+  const base = new Matrix4(world);
+  base.translate(hip[0], hip[1], hip[2]);
+
+  let thigh = new Matrix4(base);
+  thigh.rotate(thighAngle, 1, 0, 0);
+  const thighCoord = new Matrix4(thigh);
+
+  let M = new Matrix4(thigh);
+  M.translate(0, -0.10, 0);
+  M.scale(0.26, 0.18, 0.28);
+  renderCube(bodyColor, M);
+
+  let calf = new Matrix4(thighCoord);
+  calf.translate(0, -0.18, 0.05);
+  calf.rotate(calfAngle, 1, 0, 0);
+  const calfCoord = new Matrix4(calf);
+
+  M = new Matrix4(calf);
+  M.translate(0, -0.10, 0);
+  M.scale(0.24, 0.18, 0.26);
+  renderCube(bodyColor, M);
+
+  const zPush = toeForward ? 0.20 : 0.11;
+  const zTilt = toeForward ? 10 : -6;
+
+  let foot = new Matrix4(calfCoord);
+  foot.translate(0.02, -0.16, zPush);
+  foot.rotate(zTilt, 1, 0, 0);
+
+  const footCoord = new Matrix4(foot);
+
+  M = new Matrix4(foot);
+  M.scale(0.30, 0.09, 0.32);
+  renderCube(bodyColor, M);
+
+  drawClaws(footCoord, clawColor, toeForward);
+}
+
+function drawClaws(footCoord, clawColor, toeForward) {
+  const dz = toeForward ? 0.18 : 0.14;
+
+  const toes = [
+    [-0.10, -0.06, dz],
+    [0.00, -0.06, dz + 0.02],
+    [0.10, -0.06, dz],
+  ];
+
+  for (const [dx, dy, dz2] of toes) {
+    const M = new Matrix4(footCoord);
+    M.translate(dx, dy, dz2);
+    M.scale(0.07, 0.05, 0.09);
+    renderCube(clawColor, M);
+  }
+}
+
+function drawRealHead(world, bodyGreen) {
+  const eyeW = [1, 1, 1, 1];
+  const eyeB = [0, 0, 0, 1];
+  const blush = [1, 0.6, 0.75, 1];
+  const mouth = [0.08, 0.08, 0.08, 1];
+  const tearC = [0.25, 0.55, 1.0, 1];
+  const nostrilC = [0.05, 0.05, 0.05, 1];
+
+  const headX = 0.00;
+  const headY = -0.16;
+  const headZ = 1.05;
+
+  const headSX = 0.72;
+  const headSY = 0.48;
+  const headSZ = 0.60;
+
+  const neckX = 0.10;
+  const neckY = -0.20;
+  const neckStartZ = 0.46;
+  const neckRad = 0.20;
+
+  const headBackZ = headZ - headSZ * 0.5;
+  let neckLen = headBackZ - neckStartZ;
+  if (neckLen < 0.05) neckLen = 0.05;
+
+  let M = new Matrix4(world);
+  M.translate(neckX, neckY - 0.06, neckStartZ - 0.08);
+  M.scale(0.36, 0.26, 0.36);
+  renderCube(bodyGreen, M);
+
+  M = new Matrix4(world);
+  M.translate(neckX, neckY, neckStartZ);
+  M.rotate(90, 1, 0, 0);
+  M.scale(neckRad, neckLen, neckRad);
+  renderCylinder(bodyGreen, M);
+
+  const headBase = new Matrix4(world);
+  headBase.translate(headX, headY, headZ);
+
+  M = new Matrix4(headBase);
+  M.scale(headSX, headSY, headSZ);
+  renderSphere(bodyGreen, M, 10, 5.7);
+
+  function faceCube(c, x, y, z, sx, sy, sz) {
+    const T = new Matrix4(headBase);
+    T.translate(x, y, z);
+    T.scale(sx, sy, sz);
+    renderCube(c, T);
+  }
+
+  function faceSphere(c, x, y, z, sx, sy, sz, size = 2.4, detail = 6) {
+    const T = new Matrix4(headBase);
+    T.translate(x, y, z);
+    T.scale(sx, sy, sz);
+    renderSphere(c, T, detail, size);
+  }
+
+  const faceZ = headSZ * 0.5 + 0.06;
+
+  const poking = true;
+  
+  const t = g_pokeT;
+  const ease = (t < 0.5) ? (2 * t * t) : (1 - Math.pow(-2 * t + 2, 2) / 2);
+  const tearY = 0.05 - 0.40 * ease;
+
+  faceCube(blush, -0.24, -0.02, faceZ, 0.11, 0.08, 0.04);
+  faceCube(blush, 0.24, -0.02, faceZ, 0.11, 0.08, 0.04);
+
+  function drawNostrils() {
+    faceCube(nostrilC, -0.05, 0.02, faceZ + 0.01, 0.035, 0.035, 0.02);
+    faceCube(nostrilC, 0.05, 0.02, faceZ + 0.01, 0.035, 0.035, 0.02);
+  }
+
+  if (g_pokeMode === 0) {
+    let L = new Matrix4(headBase);
+    L.translate(-0.17, 0.12, faceZ + 0.02);
+    L.rotate(-30, 0, 0, 1);
+    L.scale(0.16, 0.03, 0.04);
+    renderCube(eyeB, L);
+
+    L = new Matrix4(headBase);
+    L.translate(-0.17, 0.08, faceZ + 0.02);
+    L.rotate(30, 0, 0, 1);
+    L.scale(0.16, 0.03, 0.04);
+    renderCube(eyeB, L);
+
+    let R = new Matrix4(headBase);
+    R.translate(0.19, 0.12, faceZ + 0.02);
+    R.rotate(30, 0, 0, 1);
+    R.scale(0.16, 0.03, 0.04);
+    renderCube(eyeB, R);
+
+    R = new Matrix4(headBase);
+    R.translate(0.19, 0.08, faceZ + 0.02);
+    R.rotate(-30, 0, 0, 1);
+    R.scale(0.16, 0.03, 0.04);
+    renderCube(eyeB, R);
+
+    faceCube(mouth, 0.02, -0.14, faceZ + 0.02, 0.20, 0.04, 0.03);
+    faceCube(mouth, -0.10, -0.16, faceZ + 0.02, 0.06, 0.06, 0.03);
+    faceCube(mouth, 0.14, -0.16, faceZ + 0.02, 0.06, 0.06, 0.03);
+
+    faceSphere(tearC, -0.20, tearY, faceZ + 0.10, 0.10, 0.14, 0.10, 2.4, 6);
+    faceSphere(tearC, 0.20, tearY, faceZ + 0.10, 0.10, 0.14, 0.10, 2.4, 6);
+  } else {
+    faceCube(eyeB, -0.15, 0.12, faceZ + 0.02, 0.16, 0.03, 0.04);
+    faceCube(eyeB, 0.17, 0.12, faceZ + 0.02, 0.16, 0.03, 0.04);
+
+    drawNostrils();
+
+    const open = 0.01 + 0.03 * ease;
+    const vx = 0.02;
+    const vy = -0.12;
+    const vz = faceZ + 0.03;
+
+    const inward = 0.052;
+    const down = -0.02;
+
+    let V1 = new Matrix4(headBase);
+    V1.translate(vx, vy - open, vz);
+    V1.rotate(35, 0, 0, 1);
+    V1.translate(inward, down, 0);
+    V1.scale(0.12, 0.035, 0.03);
+    renderCube(mouth, V1);
+
+    let V2 = new Matrix4(headBase);
+    V2.translate(vx, vy - open, vz);
+    V2.rotate(-35, 0, 0, 1);
+    V2.translate(-inward, down, 0);
+    V2.scale(0.12, 0.035, 0.03);
+    renderCube(mouth, V2);
+  }
+}
+main();

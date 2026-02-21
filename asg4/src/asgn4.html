@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Asgn4 - Turtle World Lighting</title>
+
+  <style>
+    #canvasWrap{
+      position: relative;
+      width: 600px;
+      height: 600px;
+    }
+    #webgl{
+      display: block;
+      border: 1px solid #000;
+      outline: none;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* HUD overlays (keep yours) */
+    #rocksHUD{
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.55);
+      color: #fff;
+      padding: 8px 10px;
+      font: 12px monospace;
+      border-radius: 8px;
+      z-index: 99999;
+      pointer-events: none;
+      user-select: none;
+    }
+    .dialogue{
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      width: 560px;
+      max-width: calc(100% - 24px);
+      background: #fff;
+      color: #000;
+      padding: 12px 16px 10px;
+      font-family: "Courier New", monospace;
+      font-size: 16px;
+      line-height: 1.35;
+      border: 4px solid #000;
+      box-shadow: 4px 4px 0 #000;
+      z-index: 9999;
+      pointer-events: none;
+      user-select: none;
+    }
+    .dialogue p{ margin: 0; }
+    .hidden{ display:none; }
+
+    /* ===== Asgn4 UI panel ===== */
+    #uiPanel{
+      width: 600px;
+      margin: 10px 0;
+      padding: 10px 12px;
+      border: 1px solid #000;
+      border-radius: 10px;
+      font: 12px monospace;
+      background: #f7f7f7;
+    }
+    #uiPanel .row{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 6px 0;
+      flex-wrap: wrap;
+    }
+    #uiPanel label{ min-width: 150px; }
+    #uiPanel input[type="range"]{ width: 250px; }
+    #uiPanel button{
+      padding: 6px 10px;
+      border-radius: 8px;
+      border: 1px solid #000;
+      background: #fff;
+      cursor: pointer;
+    }
+    #uiPanel .pill{
+      padding: 2px 8px;
+      border: 1px solid #000;
+      border-radius: 999px;
+      background: #fff;
+    }
+  </style>
+</head>
+  <p><strong>Student Name:</strong> Angela Yu</p>
+  <p><strong>Email:</strong> annyu@ucsc.edu</p>
+
+  <!-- ===== ASGN4 CONTROLS ===== -->
+  <div id="uiPanel">
+    <div class="row">
+      <button id="btnLighting">Lighting: ON</button>
+      <button id="btnNormals">Show Normals: OFF</button>
+      <button id="btnPoint">Point Light: ON</button>
+      <button id="btnSpot">Spot Light: ON</button>
+      <span class="pill">Tip: drag mouse to look, WASD to move</span>
+    </div>
+
+    <div class="row">
+      <label>Light Orbit Radius</label>
+      <input id="sLightRadius" type="range" min="2" max="20" step="0.1" value="8">
+      <span id="vLightRadius">8.0</span>
+    </div>
+
+    <div class="row">
+      <label>Light Height</label>
+      <input id="sLightHeight" type="range" min="0" max="10" step="0.1" value="3">
+      <span id="vLightHeight">3.0</span>
+    </div>
+
+    <div class="row">
+      <label>Light Color (R)</label>
+      <input id="sLightR" type="range" min="0" max="1" step="0.01" value="1">
+      <span id="vLightR">1.00</span>
+    </div>
+
+    <div class="row">
+      <label>Light Color (G)</label>
+      <input id="sLightG" type="range" min="0" max="1" step="0.01" value="1">
+      <span id="vLightG">1.00</span>
+    </div>
+
+    <div class="row">
+      <label>Light Color (B)</label>
+      <input id="sLightB" type="range" min="0" max="1" step="0.01" value="1">
+      <span id="vLightB">1.00</span>
+    </div>
+
+    <div class="row">
+      <label>Spot Cutoff (deg)</label>
+      <input id="sSpotCut" type="range" min="5" max="60" step="1" value="20">
+      <span id="vSpotCut">20</span>
+    </div>
+  </div>
+
+  <div id="perf"
+       style="position:fixed; top:10px; right:10px; background:#0008; color:#fff;
+              padding:8px 10px; font:12px monospace; border-radius:8px; z-index:9999;">
+    FPS: --<br>ms: --
+  </div>
+
+  <div id="canvasWrap">
+    <canvas id="webgl" width="600" height="600" tabindex="0"></canvas>
+    <div id="rocksHUD">Rocks left: --</div>
+    <div id="dialogueBox" class="dialogue hidden">
+      <p id="dialogueText">Press L to read the turtle lore...</p>
+    </div>
+  </div>
+
+  <p>
+    Controls: WASD / Arrow keys = move, Q/E = pan, Mouse drag = look, F/R = add/delete, L = lore,
+    P = save, O = load, C = clear save
+  </p>
+
+  <script src="../lib/webgl-utils.js"></script>
+  <script src="../lib/webgl-debug.js"></script>
+  <script src="../lib/cuon-utils.js"></script>
+  <script src="../lib/cuon-matrix-cse160.js"></script>
+
+  <script src="Triangle.js"></script>
+
+  <script src="Cylinder.js"></script>
+  <script src="Sphere.js"></script>
+  <script src="Hemisphere.js"></script>
+  <script src="TriangularPrism.js"></script>
+  <script src="Camera.js"></script>
+  <script type="module" src="./asgn4.js"></script>
+  
+</body>
+</html>
