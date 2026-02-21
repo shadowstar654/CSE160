@@ -1,7 +1,3 @@
-// ======================= Hemisphere.js (LIT + NORMALS) =======================
-// Requires globals: gl, a_Position, a_Normal, u_ModelMatrix, u_FragColor
-// Generates TOP hemisphere: phi 0..PI/2
-
 class Hemisphere {
   constructor() {
     this.color = [1, 1, 1, 1];

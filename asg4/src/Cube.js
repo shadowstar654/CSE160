@@ -1,6 +1,3 @@
-// ======================= Cube.js (LIT + UV + NORMALS) =======================
-// ES-module friendly. Can fall back to globalThis.gl if gl isn't passed.
-
 let g_posBuf = null;
 let g_uvBuf  = null;
 let g_nBuf   = null;
@@ -18,8 +15,6 @@ function ensureCubeBuffers(gl) {
   if (!g_posBuf) g_posBuf = gl.createBuffer();
   if (!g_uvBuf)  g_uvBuf  = gl.createBuffer();
   if (!g_nBuf)   g_nBuf   = gl.createBuffer();
-
-  // Upload static data ONCE (major performance + avoids accidental issues)
   if (!g_uploaded) {
     gl.bindBuffer(gl.ARRAY_BUFFER, g_posBuf);
     gl.bufferData(gl.ARRAY_BUFFER, CUBE_POS, gl.STATIC_DRAW);

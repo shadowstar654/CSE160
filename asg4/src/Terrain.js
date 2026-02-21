@@ -1,6 +1,3 @@
-// ======================= Terrain.js (ES MODULE, LIT NORMALS + UV) =======================
-// Copy-paste this whole file as Terrain.js
-
 export class Terrain {
   constructor(N = 128, size = 40) {
     this.N = N;

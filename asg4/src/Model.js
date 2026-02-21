@@ -6,22 +6,21 @@ function cleanToken(tok) {
 }
 
 function parseIndex(idxStr, arrayLen) {
-  // OBJ indices are 1-based. Can be negative (relative to end).
   const i = parseInt(idxStr, 10);
   if (!Number.isFinite(i)) return null;
   if (i > 0) return i - 1;
-  if (i < 0) return arrayLen + i; // e.g. -1 refers to last
+  if (i < 0) return arrayLen + i;
   return null;
 }
 
 export default class Model {
   /**
    * @param {WebGLRenderingContext} gl
-   * @param {string} filePath - path/URL to .obj
+   * @param {string} filePath
    * @param {object} [opts]
-   * @param {boolean} [opts.autoCenter=true] - center model at origin
-   * @param {boolean} [opts.autoScale=true] - scale model to fit into unit-ish size
-   * @param {number}  [opts.targetSize=2.0] - approximate diameter after scaling
+   * @param {boolean} [opts.autoCenter=true]
+   * @param {boolean} [opts.autoScale=true]
+   * @param {number}  [opts.targetSize=2.0]
    */
   constructor(gl, filePath, opts = {}) {
     this.gl = gl;
@@ -98,20 +97,13 @@ export default class Model {
         const nz = parseFloat(parts[3]);
         normals.push(nx, ny, nz);
       } else if (head === "f") {
-        // faces can be triangles or polygons: triangulate fan (0, i, i+1)
-        // Your format looks like: v//vn (with possible trailing commas)
         const faceTokens = parts.slice(1).map(cleanToken).filter(Boolean);
         if (faceTokens.length < 3) continue;
-
-        // parse each vertex spec in the face
         const faceVerts = [];
         for (const ft of faceTokens) {
-          // expected: "1069//1" (maybe with commas already cleaned)
           const split = ft.split("//");
           if (split.length < 2) {
-            // Not v//vn; ignore or try a more general split
             const p = ft.split("/");
-            // try v/vt/vn or v/vt
             const vStr = p[0];
             const vnStr = p.length >= 3 ? p[2] : null;
             faceVerts.push({ vStr, vnStr });
@@ -119,9 +111,7 @@ export default class Model {
             faceVerts.push({ vStr: split[0], vnStr: split[1] });
           }
         }
-
         const vCount = faceVerts.length;
-
         const triEmit = (a, b, c) => {
           for (const idx of [a, b, c]) {
             const vStr = faceVerts[idx].vStr;
@@ -153,8 +143,6 @@ export default class Model {
         }
       }
     }
-
-    // optional auto-center/scale: apply to vertex data directly
     if (outPos.length > 0 && Number.isFinite(minX)) {
       const cx = (minX + maxX) * 0.5;
       const cy = (minY + maxY) * 0.5;
@@ -185,12 +173,9 @@ export default class Model {
 
     // If normals are missing or mismatched, still keep arrays aligned
     if (outNor.length !== outPos.length) {
-      // fallback: fill with up normals
       outNor.length = 0;
       for (let i = 0; i < outPos.length; i += 3) outNor.push(0, 1, 0);
     }
-
-    // Guard against NaNs (common if face parsing goes wrong)
     for (let i = 0; i < outPos.length; i++) {
       if (!Number.isFinite(outPos[i])) outPos[i] = 0;
     }
@@ -217,19 +202,11 @@ export default class Model {
 
     gl.bindBuffer(gl.ARRAY_BUFFER, null);
   }
-
-  /**
-   * Render using either:
-   *  - render(gl, programObj) where programObj has a_Position/a_Normal/u_ModelMatrix/u_NormalMatrix/u_FragColor
-   *  - OR render(gl, { a_Position, a_Normal, u_ModelMatrix, u_NormalMatrix, u_FragColor }) with raw locations
-   */
   render(gl, program) {
     if (!this.isFullyLoaded) return;
     if (!program) return;
 
     const aPos = program.a_Position ?? program;
-    // If you pass raw locations object, these exist directly.
-    // If you pass a "program object", they also exist.
     const a_Position = program.a_Position;
     const a_Normal = program.a_Normal;
     const u_ModelMatrix = program.u_ModelMatrix;

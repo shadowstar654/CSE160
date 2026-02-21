@@ -1273,7 +1273,7 @@ function main() {
   gl = canvas.getContext('webgl');
   if (!gl) return;
 
-  globalThis.gl = gl;  // do this AFTER getContext
+  globalThis.gl = gl;
   if (!gl) return;
 
   gl.enable(gl.DEPTH_TEST);
@@ -1287,14 +1287,12 @@ function main() {
   u_ModelMatrix = gl.getUniformLocation(gl.program, 'u_ModelMatrix');
   u_ViewMatrix = gl.getUniformLocation(gl.program, 'u_ViewMatrix');
   u_ProjectionMatrix = gl.getUniformLocation(gl.program, 'u_ProjectionMatrix');
-  // Make shader locations visible to the old (non-module) shape files
   globalThis.a_Position = a_Position;
   globalThis.a_UV = a_UV;
   globalThis.a_Normal = a_Normal;
 
   globalThis.u_FragColor = u_FragColor;
   globalThis.u_ModelMatrix = u_ModelMatrix;
-  globalThis.u_NormalMatrix = u_NormalMatrix;
 
   globalThis.u_Sampler = u_Sampler;
   globalThis.u_UseTexture = u_UseTexture;
@@ -1311,6 +1309,7 @@ function main() {
 
   // lighting uniforms
   u_NormalMatrix = gl.getUniformLocation(gl.program, 'u_NormalMatrix');
+  globalThis.u_NormalMatrix = u_NormalMatrix;
   u_CameraPos = gl.getUniformLocation(gl.program, 'u_CameraPos');
 
   u_LightingOn = gl.getUniformLocation(gl.program, 'u_LightingOn');
@@ -1398,8 +1397,6 @@ function main() {
   g_camera.updateView();
   // ===== Load Bunny OBJ =====
   g_bunny = new Model(gl, "bunny.obj");
-
-  // optional: wait for it to finish loading
   g_bunny.ready.then(() => {
     console.log("Bunny loaded!");
   }).catch(err => {
@@ -1476,7 +1473,6 @@ function tick() {
   renderScene();
   requestAnimationFrame(tick);
 }
-// Animation (kept as-is)
 function updateAnimationAngles() {
   const a = Math.sin(g_seconds * 2.0);
   const b = Math.sin(g_seconds * 2.0 + Math.PI);
@@ -1535,25 +1531,18 @@ function renderScene() {
     SM.scale(0.6, 0.6, 0.6);
     renderSphere([0.9, 0.2, 0.2, 1.0], SM, 18, 6.0); // red sphere
   }
-  // ===== Draw Bunny OBJ =====
-  if (g_bunny && g_bunny.isFullyLoaded) {
+  //bunny
+  if (g_bunny) {
     const M = new Matrix4(world);
+    const bx = 1.15;
+    const bz = 0.5;
+    const by = groundYAtWorld(bx, bz) + 0.45;
 
-    // position it somewhere visible
-    M.translate(2, groundYAtWorld(2, 0) + 0.2, 0);
-
-    // scale it (IMPORTANT: bunny is usually huge)
-    M.scale(0.1, 0.1, 0.1);
+    M.translate(bx, by, bz);
+    M.scale(0.6, 0.6, 0.6);
 
     g_bunny.matrix.set(M);
-
-    g_bunny.render(gl, {
-      a_Position,
-      a_Normal,
-      u_ModelMatrix,
-      u_NormalMatrix,
-      u_FragColor
-    });
+    g_bunny.render(gl, { a_Position, a_Normal, u_ModelMatrix, u_NormalMatrix, u_FragColor });
   }
   if (!g_turtleGone) {
     // Put turtle on terrain near origin
