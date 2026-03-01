@@ -848,12 +848,11 @@ function endConversationSuccess() {
   dialogueActive = true;
   setDialogueName("Paimon");
   openDialogueText(
-    "You know...I've known from the start that you're not traveler, and I'm also...not Paimon.\n" +
-      "I'm just a creation of the man who wants to kill you.\n" +
-      "But you know...the more time I spent with you, the more I felt like you were traveler.\n" +
-      "Even though I'm not Paimon, I have inherited all the feelings she holds for traveler, and in the same way, I think I feel the same for you.",
-      "Please go on now, here is the key...",
-    "Press <b>Enter</b> to continue."
+  "You know...I've known from the start that you're not traveler, and I'm also...not Paimon.\n" +
+    "I'm just a creation of the man who wants to kill you.\n" +
+    "But you know...the more time I spent with you, the more I felt like you were traveler.\n" +
+    "Even though I'm not Paimon, I have inherited all the feelings she holds for traveler, and in the same way, I think I feel the same for you.",
+  "Please go on now, here is the key...\nPress Enter to continue."
   );
 
   setTimeout(() => {
@@ -1261,9 +1260,20 @@ function makePlanter(x, z, scale = 1) {
   soil.position.set(0, 0.76 * scale, 0);
   g.add(soil);
 
+    const bushMat = new THREE.MeshStandardMaterial({
+    map: flowerTex,
+    roughness: 0.75,
+    metalness: 0.0,
+
+    // glow
+    emissive: new THREE.Color(0x66ffcc),
+    emissiveIntensity: 0.55,
+    emissiveMap: flowerTex, // uses the texture pattern for glow
+  });
+
   const bush = new THREE.Mesh(
     new THREE.SphereGeometry(0.75 * scale, 18, 14),
-    new THREE.MeshStandardMaterial({ map: flowerTex, roughness: 0.9, metalness: 0.0 })
+    bushMat
   );
   bush.position.set(0, 1.15 * scale, 0);
   bush.castShadow = true;
@@ -1949,7 +1959,71 @@ function beginConversation() {
 // =====================================================
 let bossActive = false;
 let bossTutorialShowing = false;
+// =====================================================
+// BOSS ATMOSPHERE (GLOBAL, not inside tick)
+// =====================================================
+let bossLightsOn = false;
 
+const bossLights = {
+  key: null,     // red key light
+  rim: null,     // cyan rim spot
+  pulseA: null,  // magenta pulse
+  pulseB: null,  // green pulse
+  saved: null,   // original scene fog/exposure
+};
+
+function enableBossAtmosphere() {
+  if (bossLightsOn) return;
+  bossLightsOn = true;
+
+  // Save baseline scene settings to restore later
+  bossLights.saved = {
+    fog: scene.fog,
+    exposure: renderer.toneMappingExposure,
+  };
+
+  // Fog + exposure shift (very noticeable)
+  scene.fog = new THREE.Fog(0x050007, 10, 220);
+  renderer.toneMappingExposure = 0.92;
+
+  // Colored lights
+  bossLights.key = new THREE.PointLight(0xff2a2a, 2.2, 90);
+  bossLights.key.castShadow = false;
+  scene.add(bossLights.key);
+
+  bossLights.rim = new THREE.SpotLight(0x25f6ff, 1.6, 220, Math.PI / 9, 0.55, 1);
+  bossLights.rim.castShadow = false;
+  scene.add(bossLights.rim);
+  scene.add(bossLights.rim.target);
+
+  bossLights.pulseA = new THREE.PointLight(0xff2cff, 1.2, 120);
+  scene.add(bossLights.pulseA);
+
+  bossLights.pulseB = new THREE.PointLight(0x66ff44, 1.1, 120);
+  scene.add(bossLights.pulseB);
+}
+
+function disableBossAtmosphere() {
+  if (!bossLightsOn) return;
+  bossLightsOn = false;
+
+  // Remove boss lights
+  if (bossLights.key)   { scene.remove(bossLights.key);   bossLights.key = null; }
+  if (bossLights.rim)   {
+    scene.remove(bossLights.rim);
+    if (bossLights.rim.target) scene.remove(bossLights.rim.target);
+    bossLights.rim = null;
+  }
+  if (bossLights.pulseA){ scene.remove(bossLights.pulseA); bossLights.pulseA = null; }
+  if (bossLights.pulseB){ scene.remove(bossLights.pulseB); bossLights.pulseB = null; }
+
+  // Restore scene settings
+  if (bossLights.saved) {
+    scene.fog = bossLights.saved.fog;
+    renderer.toneMappingExposure = bossLights.saved.exposure;
+    bossLights.saved = null;
+  }
+}
 const BOSS = {
   maxHP: 120,
   hp: 120,
@@ -2190,6 +2264,7 @@ function startBossPhaseFromConversation() {
 }
 
 function startBossFight() {
+  enableBossAtmosphere();
   if (bossActive) return;
   bossActive = true;
   BOSS.frozen = false;
@@ -2212,6 +2287,7 @@ function startBossFight() {
 }
 
 function endBossFight(victory) {
+  disableBossAtmosphere();
   bossActive = false;
   BOSS.frozen = true;
   setBossHudVisible(false);
@@ -2318,6 +2394,7 @@ function updateProjectiles(dt) {
 }
 
 function softResetToBeginning() {
+  disableBossAtmosphere();
   badEndingTriggered = false;
   normalEndingTriggered = false;
   gameplayLocked = false;
@@ -2994,7 +3071,6 @@ function tick(t) {
   const radius = 190;
   const heightBob = 10;
   const ang = t * 0.00018;
-
   orbitLight.position.set(
     center.x + Math.cos(ang) * radius,
     center.y + Math.sin(t * 0.0006) * heightBob,
@@ -3029,6 +3105,35 @@ function tick(t) {
 
   // Boss AI
   updateBossAI(dt, t);
+    // Boss lighting animation + attachment
+// Boss lighting animation + attachment (runs every frame)
+if (bossActive && paimon && bossLightsOn) {
+  const bp = paimon.position;
+
+  // Attach lights around boss
+  bossLights.key.position.set(bp.x + 3.2, bp.y + 5.5, bp.z + 3.2);
+
+  bossLights.rim.position.set(bp.x - 8.0, bp.y + 10.0, bp.z - 10.0);
+  bossLights.rim.target.position.set(bp.x, bp.y + 3.0, bp.z);
+
+  // Pulsing “panic” lights
+  const s1 = 0.65 + 0.35 * Math.sin(t * 0.006);
+  const s2 = 0.60 + 0.40 * Math.sin(t * 0.009 + 1.7);
+
+  bossLights.pulseA.intensity = 1.1 * s1;
+  bossLights.pulseB.intensity = 1.0 * s2;
+
+  bossLights.pulseA.position.set(
+    bp.x + 10 * Math.cos(t * 0.0012),
+    bp.y + 6.0,
+    bp.z + 10 * Math.sin(t * 0.0012)
+  );
+  bossLights.pulseB.position.set(
+    bp.x + 10 * Math.cos(t * 0.0012 + 2.2),
+    bp.y + 6.0,
+    bp.z + 10 * Math.sin(t * 0.0012 + 2.2)
+  );
+}
     // click + hold to shoot anemo during boss fight
   if (anemoShooting) shootAnemoShot(t);
   // projectiles
@@ -3036,7 +3141,6 @@ function tick(t) {
 
   // pickup + key prompt + particle prompt
   updatePickupRaycast();
-
   // Talk prompt only when ready
   const canShowTalk =
     controls.isLocked &&
