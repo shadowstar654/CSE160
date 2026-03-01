@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>CSE160 Assignment 5 - Three.js World</title>
+    <link rel="stylesheet" href="./style.css" />
+
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+    </script>
+  </head>
+
+  <body>
+    <div id="overlay">
+      <h1>Assignment 5: Welcome to my small game! - Angela Yu </h1>
+      <p>Click Start, then use <b>WASD</b> + mouse to explore. Press <b>Esc</b> to load mouse.</p>
+      <p class="small"><b>Wow Note:</b> I added a narrative minigame with dialogue choices and multiple endings for the WOW.
+                          I checked the rubric really hard and I believe I satisfy everything! A side-note is that
+                          after climbing the stairs it does sometimes glitch out a little. I was thinking if I were
+                          to work on this further after this class ends, I will probably adjust it to be less glitchy.
+                          However, it shouldn't be as glitchy if user makes sure to land on the platform exactly
+                          when jumping. Also I have enabled jumping in this game. So press space to jump! </p>
+      <button id="startBtn">Start</button>
+    </div>
+
+    <canvas id="c"></canvas>
+    <script type="module" src="./asgn5.js"></script>
+  </body>
+</html>
