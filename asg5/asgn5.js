@@ -4,6 +4,81 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { RectAreaLightUniformsLib } from "three/addons/lights/RectAreaLightUniformsLib.js";
 
 RectAreaLightUniformsLib.init();
+// Music System
+const MUSIC = {
+  current:   null,
+  target:    null,
+  fadeSpeed: 0.008,
+  maxVol:    0.5,
+  _rafId:    null,
+
+  bg:     null,
+  boss:   null,
+  ending: null,
+};
+
+function _makeTrack(src) {
+  const a = new Audio(src);
+  a.loop   = true;
+  a.volume = 0;
+  return a;
+}
+
+// Tracks are created once — paths relative to your index.html
+MUSIC.bg     = _makeTrack("./assets/audio/bg_music.mp3");
+MUSIC.boss   = _makeTrack("./assets/audio/boss_music.mp3");
+MUSIC.ending = _makeTrack("./assets/audio/ending_music.mp3");
+
+function _stopFade() {
+  if (MUSIC._rafId !== null) {
+    cancelAnimationFrame(MUSIC._rafId);
+    MUSIC._rafId = null;
+  }
+}
+
+function crossfadeTo(nextTrack) {
+  if (!nextTrack || MUSIC.current === nextTrack) return;
+
+  _stopFade();
+
+  const prev = MUSIC.current;
+  MUSIC.current = nextTrack;
+
+  // Start new track from beginning
+  nextTrack.currentTime = 0;
+  nextTrack.play().catch(() => {});
+
+  function step() {
+    let done = true;
+
+    // Fade old track out
+    if (prev && !prev.paused) {
+      const next = Math.max(0, prev.volume - MUSIC.fadeSpeed);
+      prev.volume = next;
+      if (next === 0) prev.pause();
+      else done = false;
+    }
+
+    // Fade new track in
+    if (nextTrack.volume < MUSIC.maxVol) {
+      nextTrack.volume = Math.min(MUSIC.maxVol, nextTrack.volume + MUSIC.fadeSpeed);
+      if (nextTrack.volume < MUSIC.maxVol) done = false;
+    }
+
+    if (!done) MUSIC._rafId = requestAnimationFrame(step);
+    else MUSIC._rafId = null;
+  }
+
+  MUSIC._rafId = requestAnimationFrame(step);
+}
+
+// Called once on the very first user interaction (browser autoplay policy)
+let _musicUnlocked = false;
+function unlockAndStartMusic() {
+  if (_musicUnlocked) return;
+  _musicUnlocked = true;
+  crossfadeTo(MUSIC.bg);
+}
 
 const canvas = document.querySelector("#c");
 const overlay = document.querySelector("#overlay");
@@ -269,7 +344,7 @@ style.textContent = `
   #saveHud{
     position:fixed;
     left:18px;
-    bottom:195px; /* sits above heldItem */
+    bottom:195px;
     z-index:9997;
     padding:10px 12px;
     border-radius:12px;
@@ -377,7 +452,7 @@ document.body.appendChild(heldItem);
 // Save/Load HUD prompt (bottom-left)
 const saveHud = document.createElement("div");
 saveHud.id = "saveHud";
-saveHud.innerHTML = `Save: <b>Ctrl + S</b>\nLoad From Last Save: <b>L</b>`;
+saveHud.innerHTML = `Save: <b>Ctrl+S</b>  Load: <b>L</b>\nZoom: <b>Scroll Wheel</b>\nPan Camera: <b>Q / E</b>  Reset: <b>R</b>`;
 document.body.appendChild(saveHud);
 
 const storyTextEl = storyPanel.querySelector("#storyText");
@@ -423,13 +498,13 @@ const CONGRATS_TEXT = [
   "CONGRATULATIONS ✦",
   "",
   "You found the key.",
-  "And you didn’t lose yourself to the fog.",
+  "And you didn't lose yourself to the fog.",
   "",
   "A tiny warmth returns to your chest.",
   "Like a lantern someone left on… just for you.",
   "",
-  "“You did really good, traveler…”",
-  "“Maybe you can finally go home now.”",
+  "\u201cYou did really good, traveler\u2026\u201d",
+  "\u201cMaybe you can finally go home now.\u201d",
 ].join("\n");
 
 const AUTHORS_NOTE_TEXT = [
@@ -437,12 +512,12 @@ const AUTHORS_NOTE_TEXT = [
   "",
   "Thank you for playing my little world.",
   "I have always wanted to make a small fangame of the game that I have been playing for 6 years. This honestly seemed like the perfect time.",
-  "", "There is honestly still a lot of polishing for me to do for this game, and I wanted to add more fancy elements in the game like making it similar to Granny or The Evil Nun", 
+  "", "There is honestly still a lot of polishing for me to do for this game, and I wanted to add more fancy elements in the game like making it similar to Granny or The Evil Nun",
   "I haven't actually found a clear time to do so unfortunately...",
   "There are other endings to uncover. In total I have made 3 endings for this game: Good, Normal, and Bad. Try getting all of them! ",
   "I've worked extremely hard on this assignment, and I'm pretty sure that I have done everything I was supposed to do...",
   "",
-  "Try answering differently next time. ♡",
+  "Try answering differently next time. \u2661",
 ].join("\n");
 
 const NORMAL_ENDING_TEXT = [
@@ -462,14 +537,14 @@ const BOSS_INTRO_TEXT = [
   "The Anemo God Venti has blessed you with Anemo powers.",
   "",
   "How to fight back:",
-  "• CLICK and HOLD to shoot Anemo at the boss.",
-  "• Your shots will arc through the air, try aiming slightly upward.",
+  "\u2022 CLICK and HOLD to shoot Anemo at the boss.",
+  "\u2022 Your shots will arc through the air, try aiming slightly upward.",
   "",
   "Win: Boss HP reaches 0.",
   "Lose: Your HP reaches 0 (each hit is 10 damage).",
 ].join("\n");
 
-let endingStage = 0; // 0 none, 1 congrats/normal/bad, 2 author note, 3 finished
+let endingStage = 0;
 let gameplayLocked = false;
 
 // HUD state
@@ -575,13 +650,10 @@ function openStoryPanel(
 function closeStoryPanel() {
   storyPanel.style.display = "none";
   storyCloseX.style.display = "none";
-
   restartBtn.style.display = "none";
 }
 
-// =====================================================
-// DIALOGUE (Enter to advance) + Choice Conversation (1/2)
-// =====================================================
+// Dialogue
 let dialogueActive = false;
 let dialogueQueue = [];
 let dialogueTyping = false;
@@ -600,9 +672,9 @@ const PERSONAL_OS_LINES = [
 
 let wakeWobbleActive = false;
 let wakeWobbleStart = 0;
-let wakeWobbleDur = 1100; // ms
-let wakeWobbleAmp = 0.055; // radians (~3 degrees)
-let wakeRollAmp = 0.025;   // radians
+let wakeWobbleDur = 1100;
+let wakeWobbleAmp = 0.055;
+let wakeRollAmp = 0.025;
 
 function startWakeWobble(nowMs) {
   wakeWobbleActive = true;
@@ -615,18 +687,17 @@ function applyWakeWobble(nowMs) {
   const t = (nowMs - wakeWobbleStart) / wakeWobbleDur;
   if (t >= 1) {
     wakeWobbleActive = false;
-    camera.rotation.z = 0; // reset roll
+    camera.rotation.z = 0;
     return;
   }
 
-  // ease out
   const ease = 1 - Math.pow(t, 2);
-  const shake = Math.sin(t * Math.PI * 6) * wakeWobbleAmp * ease;
   const roll  = Math.sin(t * Math.PI * 4 + 0.8) * wakeRollAmp * ease;
   camera.rotation.z = roll;
 
   controls.getObject().position.y += Math.sin(t * Math.PI * 5) * 0.004 * ease;
 }
+
 const CONVO = [
   {
     q: "Hehe traveler, remember when we first met each other?",
@@ -718,21 +789,18 @@ function openConvoStep() {
   dialogueHintEl.innerHTML = `Press <b>1</b> or <b>2</b> to answer.`;
 }
 
-// =====================================================
-// ENDINGS
-// =====================================================
+// Endings
 let badEndingTriggered = false;
-
 
 let keySpawned = false;
 let keyRoot = null;
 let keyCollected = false;
 let lookedKey = false;
 
-// Boss ending states (new)
 let normalEndingTriggered = false;
 
 function beginGoodEndingFinale() {
+  crossfadeTo(MUSIC.ending);
   gameplayLocked = true;
   introActive = true;
 
@@ -756,6 +824,7 @@ function beginNormalEndingFinale() {
 }
 
 function beginBadEndingFinale(text = "BAD ENDING\n\nThe air turns cold.\nYour vision blurs… and the world eats your light.") {
+  crossfadeTo(MUSIC.ending);
   badEndingTriggered = true;
   gameplayLocked = true;
   introActive = true;
@@ -766,11 +835,11 @@ function beginBadEndingFinale(text = "BAD ENDING\n\nThe air turns cold.\nYour vi
 
   if (controls.isLocked) controls.unlock();
 }
+
 function spawnKeyReplacePaimon() {
   if (keySpawned) return;
   keySpawned = true;
 
-  // remove paimon from scene + stop AI
   if (paimon) {
     scene.remove(paimon);
     paimon = null;
@@ -786,19 +855,13 @@ function spawnKeyReplacePaimon() {
     (gltf) => {
       const keyObj = gltf.scene;
 
-      // move key to where paimon WAS (statue area)
-      // fallback if paimon got removed already
       const spawnPos = PAIMON.targetPos?.clone?.() ?? new THREE.Vector3(0, 2.2, 18);
       keyObj.position.copy(spawnPos);
 
-      // ground sit + lift a bit
       const gY = groundHeightAt(keyObj.position.x, keyObj.position.z);
       keyObj.position.y = gY + 2.2;
 
-      // BIGGER so you can see it easily
       keyObj.scale.setScalar(4.0);
-
-      // rotate a bit so it's visible
       keyObj.rotation.y = Math.PI * 0.25;
 
       keyObj.traverse((o) => {
@@ -862,40 +925,30 @@ function endConversationSuccess() {
   }, 380);
 }
 
-// =====================================================
-// Story panel Enter behavior + dialogue/convo keys
-// =====================================================
+// Story Panel
 window.addEventListener("keydown", (e) => {
   if (e.code === "Enter") {
+    playUIClick();
+
     if (storyPanel.style.display === "flex") {
-    // If this panel is the boss tutorial, Enter should NOT advance endings.
-    // (Boss tutorial closes with X only.)
-    if (bossActive && bossTutorialShowing) return;
+      if (bossActive && bossTutorialShowing) return;
 
-    // Ending flow pages
-    if (endingStage === 1) {
-      // Page 1 -> Page 2 (Author's Note)
-      endingStage = 2;
-      openStoryPanel(AUTHORS_NOTE_TEXT);
+      if (endingStage === 1) {
+        endingStage = 2;
+        openStoryPanel(AUTHORS_NOTE_TEXT);
+        return;
+      }
+
+      if (endingStage === 2) {
+        endingStage = 3;
+        restartBtn.style.display = "inline-block";
+        return;
+      }
+
+      closeStoryPanel();
+      introActive = false;
       return;
     }
-
-    if (endingStage === 2) {
-      // Page 2 -> Page 3 (final page with buttons)
-      endingStage = 3;
-
-      restartBtn.style.display = "inline-block";
-
-      // Keep the Author's Note text visible; just reveal buttons
-      // (No need to re-open panel, but safe if you want consistent typing behavior.)
-      return;
-    }
-
-    // Non-ending story panels (paper, etc.) or after finishing
-    closeStoryPanel();
-    introActive = false;
-    return;
-  }
 
     if (dialogueBox.style.display === "block" && dialogueActive && !convoActive) {
       if (dialogueTyping) {
@@ -941,15 +994,14 @@ window.addEventListener("keydown", (e) => {
 storyCloseX.addEventListener("click", () => {
   if (storyPanel.style.display !== "flex") return;
 
-  // Only used for boss tutorial freeze prompt:
   if (bossActive && bossTutorialShowing) {
     closeStoryPanel();
     bossTutorialShowing = false;
     introActive = false;
-    // keep controls locked (player keeps moving)
     return;
   }
 });
+
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
@@ -973,7 +1025,10 @@ scene.background = cubeLoader.load([
 const camera = new THREE.PerspectiveCamera(75, 2, 0.1, 1800);
 
 const controls = new PointerLockControls(camera, document.body);
-startBtn.addEventListener("click", () => controls.lock());
+startBtn.addEventListener("click", () => {
+  unlockAndStartMusic();
+  controls.lock();
+});
 
 function resizeRendererToDisplaySize() {
   const w = canvas.clientWidth;
@@ -983,6 +1038,56 @@ function resizeRendererToDisplaySize() {
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+  }
+}
+
+//Camera Zoom
+const CAM = {
+  fov: 75,
+  fovMin: 30,
+  fovMax: 90,
+  fovStep: 3,
+  fovTarget: 75,
+  fovSmooth: 8.0,
+  panSpeed: 1.4,
+  panSmoothYaw: 0.0,
+};
+
+// Scroll wheel → zoom
+window.addEventListener("wheel", (e) => {
+  if (!controls.isLocked) return;
+  e.preventDefault();
+  CAM.fovTarget = THREE.MathUtils.clamp(
+    CAM.fovTarget + (e.deltaY > 0 ? CAM.fovStep : -CAM.fovStep),
+    CAM.fovMin,
+    CAM.fovMax
+  );
+}, { passive: false });
+
+// Reset with R
+window.addEventListener("keydown", (e) => {
+  if (e.code === "KeyR" && controls.isLocked && !introActive) {
+    CAM.fovTarget = 75;
+  }
+});
+
+// Apply zoom + pan each frame (called inside tick)
+function updateCameraControls(dt) {
+  // Smooth zoom
+  if (Math.abs(camera.fov - CAM.fovTarget) > 0.05) {
+    camera.fov = THREE.MathUtils.lerp(camera.fov, CAM.fovTarget, Math.min(1, CAM.fovSmooth * dt));
+    camera.updateProjectionMatrix();
+  }
+
+  // Q/E pan — rotate the yaw object (controls.getObject() is the horizontal pivot)
+  const canPan = controls.isLocked && !introActive && !dialogueActive &&
+                 storyPanel.style.display !== "flex" && !gameplayLocked && !bossTutorialShowing;
+
+  if (canPan) {
+    const panRad = THREE.MathUtils.degToRad(CAM.panSpeed);
+    const yawObj = controls.getObject();
+    if (keys.has("KeyQ")) yawObj.rotation.y += panRad * dt * 60;
+    if (keys.has("KeyE")) yawObj.rotation.y -= panRad * dt * 60;
   }
 }
 
@@ -1011,13 +1116,46 @@ function movePlayer(dt) {
   if (keys.has("KeyD")) obj.position.addScaledVector(right, step);
 }
 
-// =====================================================
-// Gravity + ground height (includes stairs)
-// =====================================================
+// Gravity + Ground Height
 const EYE_HEIGHT = 2.0;
 const GRAVITY = 22.0;
 let vY = 0;
 let onGround = false;
+
+
+const SFX = {
+  jump:  new Audio("./assets/audio/jump.mp3"),
+  // Retro Nintendo-style UI confirm click, generated via Web Audio
+  volume: 0.4,
+};
+SFX.jump.volume = SFX.volume;
+
+function playJump() {
+  if (!_musicUnlocked) return;
+  const s = SFX.jump.cloneNode();
+  s.volume = SFX.volume;
+  s.play().catch(() => {});
+}
+
+// Retro UI click — short square-wave blip, no file needed
+function playUIClick() {
+  if (!_musicUnlocked) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "square";
+    osc.frequency.setValueAtTime(660, ctx.currentTime);
+    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.04);
+    gain.gain.setValueAtTime(0.18, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.12);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.13);
+    osc.onended = () => ctx.close();
+  } catch (err) { /* silently skip if AudioContext blocked */ }
+}
 
 const STAIRS = {
   startZ: 84,
@@ -1069,6 +1207,7 @@ window.addEventListener("keydown", (e) => {
     if (onGround) {
       vY = 8.5;
       onGround = false;
+      playJump();
     }
   }
 });
@@ -1123,9 +1262,7 @@ function resolveCollisionsAxisSeparated(prevPos) {
   }
 }
 
-// =====================================================
 // Textures
-// =====================================================
 const texLoader = new THREE.TextureLoader();
 
 const wallTex = texLoader.load("./assets/textures/concrete.jpg");
@@ -1202,10 +1339,7 @@ window.addEventListener("keydown", (e) => {
   if (e.code === "KeyH") setHelpersVisible(!helpersVisible);
 });
 
-// =====================================================
-// World building helpers + geometry
-// =====================================================
-const spinMeshes = []; // ONLY decor (non-collider) goes here
+const spinMeshes = [];
 
 function makeBlock(w, h, d, x, y, z, register = true) {
   const m = new THREE.Mesh(
@@ -1260,15 +1394,13 @@ function makePlanter(x, z, scale = 1) {
   soil.position.set(0, 0.76 * scale, 0);
   g.add(soil);
 
-    const bushMat = new THREE.MeshStandardMaterial({
+  const bushMat = new THREE.MeshStandardMaterial({
     map: flowerTex,
     roughness: 0.75,
     metalness: 0.0,
-
-    // glow
     emissive: new THREE.Color(0x66ffcc),
     emissiveIntensity: 0.55,
-    emissiveMap: flowerTex, // uses the texture pattern for glow
+    emissiveMap: flowerTex,
   });
 
   const bush = new THREE.Mesh(
@@ -1319,9 +1451,6 @@ function makeArch(x, y, z, width, height, depth, register = true) {
   if (register) registerCollider(deco);
 }
 
-// =====================================================
-// Scale + Gate coordinates
-// =====================================================
 const HALF = 220;
 const GATE_Z = HALF;
 const GATE_OPENING = 16.0;
@@ -1486,7 +1615,8 @@ function addInteriorDecor() {
   }
 }
 addInteriorDecor();
-//statue
+
+// statue
 function buildVentiStatueDetailed() {
   const g = new THREE.Group();
 
@@ -1611,9 +1741,7 @@ ventiLoader.load(
   (err) => console.warn("venti.glb failed to load.", err)
 );
 
-// =====================================================
-// Clouds
-// =====================================================
+//Clouds
 const cloudGroup = new THREE.Group();
 scene.add(cloudGroup);
 const clouds = [];
@@ -1728,9 +1856,7 @@ itemLoader.load(
   (err) => console.warn("paper.glb failed to load.", err)
 );
 
-// =====================================================
-// PAIMON
-// =====================================================
+//Paimon
 function yawFaceTarget(obj, targetPos) {
   const dir = targetPos.clone().sub(obj.position);
   dir.y = 0;
@@ -1746,7 +1872,7 @@ let darkPaimon = null;
 const PAIMON = {
   state: "GATE_WAIT",
   baseY: 2.2,
-  targetPos: new THREE.Vector3(0, 2.2, 18), // default key spawn fallback
+  targetPos: new THREE.Vector3(0, 2.2, 18),
   speed: 4.3,
   arrivalEps: 0.15,
 
@@ -1937,7 +2063,6 @@ function swapToDarkPaimon(onLoaded) {
   );
 }
 
-// Talk interaction
 function playerNearPaimon(dist) {
   if (!paimon) return false;
   const p = controls.getObject().position;
@@ -1954,39 +2079,31 @@ function beginConversation() {
   openConvoStep();
 }
 
-// =====================================================
-// BOSS FIGHT SYSTEM
-// =====================================================
 let bossActive = false;
 let bossTutorialShowing = false;
-// =====================================================
-// BOSS ATMOSPHERE (GLOBAL, not inside tick)
-// =====================================================
+
 let bossLightsOn = false;
 
 const bossLights = {
-  key: null,     // red key light
-  rim: null,     // cyan rim spot
-  pulseA: null,  // magenta pulse
-  pulseB: null,  // green pulse
-  saved: null,   // original scene fog/exposure
+  key: null,
+  rim: null,
+  pulseA: null,
+  pulseB: null,
+  saved: null,
 };
 
 function enableBossAtmosphere() {
   if (bossLightsOn) return;
   bossLightsOn = true;
 
-  // Save baseline scene settings to restore later
   bossLights.saved = {
     fog: scene.fog,
     exposure: renderer.toneMappingExposure,
   };
 
-  // Fog + exposure shift (very noticeable)
   scene.fog = new THREE.Fog(0x050007, 10, 220);
   renderer.toneMappingExposure = 0.92;
 
-  // Colored lights
   bossLights.key = new THREE.PointLight(0xff2a2a, 2.2, 90);
   bossLights.key.castShadow = false;
   scene.add(bossLights.key);
@@ -2007,7 +2124,6 @@ function disableBossAtmosphere() {
   if (!bossLightsOn) return;
   bossLightsOn = false;
 
-  // Remove boss lights
   if (bossLights.key)   { scene.remove(bossLights.key);   bossLights.key = null; }
   if (bossLights.rim)   {
     scene.remove(bossLights.rim);
@@ -2017,13 +2133,13 @@ function disableBossAtmosphere() {
   if (bossLights.pulseA){ scene.remove(bossLights.pulseA); bossLights.pulseA = null; }
   if (bossLights.pulseB){ scene.remove(bossLights.pulseB); bossLights.pulseB = null; }
 
-  // Restore scene settings
   if (bossLights.saved) {
     scene.fog = bossLights.saved.fog;
     renderer.toneMappingExposure = bossLights.saved.exposure;
     bossLights.saved = null;
   }
 }
+
 const BOSS = {
   maxHP: 120,
   hp: 120,
@@ -2058,8 +2174,7 @@ function setHeldItem(on) {
   heldItem.style.display = on ? "block" : "none";
 }
 
-// Light particles (floating cubes)
-const lightParticles = []; // { mesh, respawnPos, taken }
+const lightParticles = [];
 let heldParticle = false;
 let lookedParticle = null;
 
@@ -2080,7 +2195,6 @@ function spawnLightParticleAt(pos) {
   cube.receiveShadow = false;
 
   scene.add(cube);
-  // spin + bob as decor
   spinMeshes.push({ mesh: cube, ry: 1.5, rx: 0.7, bob: true, phase: Math.random() * Math.PI * 2 });
 
   const entry = { mesh: cube, respawnPos: pos.clone(), taken: false };
@@ -2088,9 +2202,7 @@ function spawnLightParticleAt(pos) {
   return entry;
 }
 
-// Put them at back of temple
 function createLightParticleField() {
-  // “back” = negative Z in your scene (temple interior is around z -78, so go deeper)
   const baseZ = -140;
   const baseY = 10.5;
   const spanX = 54;
@@ -2114,7 +2226,6 @@ function playerNearLightParticle(entry, dist = 4.8) {
   const p = controls.getObject().position;
   const m = entry.mesh.position;
 
-  // XZ-only distance so height doesn't block pickups
   const dx = p.x - m.x;
   const dz = p.z - m.z;
   return (dx * dx + dz * dz) < (dist * dist);
@@ -2132,34 +2243,26 @@ function takeLightParticle(entry) {
   heldParticle = true;
   setHeldItem(true);
 
-  // respawn after a short delay
   setTimeout(() => {
-    // recreate mesh
     const newEntry = spawnLightParticleAt(entry.respawnPos.clone());
-    // copy state back into the same entry object
     entry.mesh = newEntry.mesh;
     entry.taken = false;
   }, 1100);
 }
 
-// Projectiles thrown by player
-const projectiles = []; // { mesh, vel, life }
+const projectiles = [];
 
 const _tmpV3 = new THREE.Vector3();
 const _tmpV3b = new THREE.Vector3();
-
-// =====================================================
-// ANEMO SHOOTING (click + hold) — parabolic green shots
-// =====================================================
 let anemoShooting = false;
 
 const ANEMO = {
-  fireCooldown: 0.10,   // seconds between shots while holding
-  lastShotT: 0,         // ms
+  fireCooldown: 0.10,
+  lastShotT: 0,
   speed: 18.5,
-  upBoost: 5.0,         // makes it arc upward first
-  gravity: 14.0,        // projectile gravity (separate from player)
-  spread: 0.012,        // slight inaccuracy
+  upBoost: 5.0,
+  gravity: 14.0,
+  spread: 0.012,
   life: 2.2,
   damage: 6,
   hitRadius: 2.1,
@@ -2171,7 +2274,6 @@ function shootAnemoShot(nowMs) {
   if (!bossActive) return;
   if (!paimon || BOSS.frozen) return;
 
-  // cooldown
   if ((nowMs - ANEMO.lastShotT) < ANEMO.fireCooldown * 1000) return;
   ANEMO.lastShotT = nowMs;
 
@@ -2179,7 +2281,6 @@ function shootAnemoShot(nowMs) {
   camera.getWorldDirection(forward);
   forward.normalize();
 
-  // small random spread
   forward.x += (Math.random() - 0.5) * ANEMO.spread;
   forward.y += (Math.random() - 0.5) * ANEMO.spread;
   forward.z += (Math.random() - 0.5) * ANEMO.spread;
@@ -2187,7 +2288,6 @@ function shootAnemoShot(nowMs) {
 
   const start = camera.position.clone().addScaledVector(forward, 1.2);
 
-  // green "anemo-like" projectile
   const proj = new THREE.Mesh(
     new THREE.SphereGeometry(0.28, 16, 12),
     new THREE.MeshStandardMaterial({
@@ -2205,14 +2305,13 @@ function shootAnemoShot(nowMs) {
   scene.add(proj);
 
   const vel = forward.multiplyScalar(ANEMO.speed);
-  vel.y += ANEMO.upBoost; // parabolic arc starter
+  vel.y += ANEMO.upBoost;
 
   projectiles.push({ mesh: proj, vel: vel.clone(), life: ANEMO.life });
 }
 
-// Hold-to-shoot
 window.addEventListener("mousedown", (e) => {
-  if (e.button !== 0) return; // left click only
+  if (e.button !== 0) return;
   anemoShooting = true;
 });
 window.addEventListener("mouseup", (e) => {
@@ -2246,24 +2345,23 @@ function damagePlayer(amount) {
 function showBossTutorialPrompt() {
   bossTutorialShowing = true;
   introActive = true;
-  openStoryPanel(BOSS_INTRO_TEXT, { showCloseX: true, hintHTML: "Close with <b>✕</b> to begin the fight." });
+  openStoryPanel(BOSS_INTRO_TEXT, { showCloseX: true, hintHTML: "Close with <b>\u2715</b> to begin the fight." });
 }
 
 function startBossPhaseFromConversation() {
-  // Shut down convo UI instantly
   convoActive = false;
   dialogueActive = false;
   dialogueBox.style.display = "none";
   dialogueQueue = [];
   dialogueTyping = false;
 
-  // Transform paimon -> dark paimon, then start fight
   swapToDarkPaimon(() => {
     startBossFight();
   });
 }
 
 function startBossFight() {
+  crossfadeTo(MUSIC.boss);
   enableBossAtmosphere();
   if (bossActive) return;
   bossActive = true;
@@ -2271,7 +2369,6 @@ function startBossFight() {
   normalEndingTriggered = false;
   badEndingTriggered = false;
 
-  // initialize HP
   BOSS.hp = BOSS.maxHP;
   PLAYER.hp = PLAYER.maxHP;
   updateBossHud();
@@ -2287,6 +2384,7 @@ function startBossFight() {
 }
 
 function endBossFight(victory) {
+  crossfadeTo(MUSIC.ending);
   disableBossAtmosphere();
   bossActive = false;
   BOSS.frozen = true;
@@ -2294,7 +2392,6 @@ function endBossFight(victory) {
   heldParticle = false;
   setHeldItem(false);
 
-  // Remove any projectiles
   for (const p of projectiles) {
     if (p.mesh) scene.remove(p.mesh);
   }
@@ -2314,10 +2411,8 @@ function defeatBoss() {
   if (!bossActive) return;
   BOSS.frozen = true;
 
-  // Boss scream prompt
   speak("AHHH, GAHHH");
 
-  // Freeze boss in place, then vanish
   setTimeout(() => {
     if (paimon) {
       scene.remove(paimon);
@@ -2327,14 +2422,12 @@ function defeatBoss() {
   }, 900);
 }
 
-// Boss chasing + hitting player
 function updateBossAI(dt, t) {
   if (!bossActive) return;
   if (!paimon) return;
   if (BOSS.frozen) return;
   if (introActive || dialogueActive || storyPanel.style.display === "flex" || bossTutorialShowing) return;
 
-  // Chase player
   const playerPos = controls.getObject().position;
   const bossPos = paimon.position;
 
@@ -2342,16 +2435,13 @@ function updateBossAI(dt, t) {
   _tmpV3.y = 0;
   const dist = _tmpV3.length();
 
-  // face player
   yawFaceTarget(paimon, playerPos);
 
-  // move
   if (dist > 0.05) {
     _tmpV3.normalize();
     paimon.position.addScaledVector(_tmpV3, BOSS.speed * dt);
   }
 
-  // attack if close enough (cooldown)
   if (dist < BOSS.hitRange) {
     if (t - BOSS.lastHitT > BOSS.hitCooldown * 1000) {
       BOSS.lastHitT = t;
@@ -2359,6 +2449,7 @@ function updateBossAI(dt, t) {
     }
   }
 }
+
 function updateProjectiles(dt) {
   if (projectiles.length === 0) return;
 
@@ -2376,11 +2467,9 @@ function updateProjectiles(dt) {
       continue;
     }
 
-    // parabolic motion
     p.vel.y -= ANEMO.gravity * dt;
     p.mesh.position.addScaledVector(p.vel, dt);
 
-    // collide with boss
     if (bossActive && paimon && !BOSS.frozen) {
       const d = p.mesh.position.distanceTo(paimon.position);
       if (d < ANEMO.hitRadius) {
@@ -2394,13 +2483,13 @@ function updateProjectiles(dt) {
 }
 
 function softResetToBeginning() {
+  crossfadeTo(MUSIC.bg);
   disableBossAtmosphere();
   badEndingTriggered = false;
   normalEndingTriggered = false;
   gameplayLocked = false;
   endingStage = 0;
 
-  // boss reset
   bossActive = false;
   bossTutorialShowing = false;
   BOSS.frozen = false;
@@ -2424,14 +2513,12 @@ function softResetToBeginning() {
   hearts = 3;
   updateDialogueStyle();
 
-  // remove key if exists
   if (keyRoot) scene.remove(keyRoot);
   keyRoot = null;
   keySpawned = false;
   keyCollected = false;
   lookedKey = false;
 
-  // clear held + projectiles
   heldParticle = false;
   setHeldItem(false);
   for (const pr of projectiles) {
@@ -2439,13 +2526,16 @@ function softResetToBeginning() {
   }
   projectiles.length = 0;
 
-  // move player back
   const obj = controls.getObject();
   obj.position.set(0, EYE_HEIGHT, GATE_Z + 34);
   vY = 0;
   onGround = true;
 
-  // remove paimon (any version) + respawn normal paimon
+  // Reset camera zoom/pan on restart
+  CAM.fovTarget = 75;
+  camera.fov = 75;
+  camera.updateProjectionMatrix();
+
   if (paimon) scene.remove(paimon);
   paimon = null;
 
@@ -2481,12 +2571,8 @@ function softResetToBeginning() {
 }
 restartBtn.addEventListener("click", () => softResetToBeginning());
 
-
-// =====================================================
-// Keydown interactions (F) + boss particle pickup
-// =====================================================
 window.addEventListener("keydown", (e) => {
-  // Key pickup (F) — ONLY if key is present
+  // Key pickup (F)
   if (e.code === "KeyF" && lookedKey && controls.isLocked && !introActive && !dialogueActive && !bossTutorialShowing) {
     keyCollected = true;
     lookedKey = false;
@@ -2499,7 +2585,6 @@ window.addEventListener("keydown", (e) => {
     beginGoodEndingFinale();
     return;
   }
-
 
   // Paper pickup (F)
   if (e.code === "KeyF" && lookedPickable && controls.isLocked && !introActive && !dialogueActive && !bossTutorialShowing) {
@@ -2546,24 +2631,17 @@ controls.addEventListener("lock", async () => {
     await playHumanBlinks();
     await sleep(180);
 
-    // little dizzy head wobble / shake
     startWakeWobble(performance.now());
     await sleep(220);
     setDialogueName("...");
-    // Personal OS: guide them to the note
     openDialogueText(PERSONAL_OS_LINES, "Press <b>Enter</b> to continue.");
     setTask("Find the note and pick it up (F).");
-
-    // When they close the OS dialogue, normal movement resumes (your closeDialogue sets introActive=false)
   }
 });
 controls.addEventListener("unlock", () => {
   overlay.style.display = "grid";
 });
 
-// =====================================================
-// Pickup raycast (paper) + key proximity + light particle proximity
-// =====================================================
 function updatePickupRaycast() {
   lookedPickable = null;
   lookedKey = false;
@@ -2574,7 +2652,7 @@ function updatePickupRaycast() {
     return;
   }
 
-  // KEY prompt (white prompt)
+  // KEY prompt
   if (keyRoot && !keyCollected && playerNearKey(5.0)) {
     lookedKey = true;
     pickupPrompt.textContent = "Take the key? (F)";
@@ -2586,8 +2664,6 @@ function updatePickupRaycast() {
     pickupPrompt.style.background = "rgba(0,0,0,0.55)";
     pickupPrompt.style.color = "rgba(255,255,255,0.95)";
   }
-
- 
 
   // Paper raycast pickup
   camera.getWorldDirection(_rayDir);
@@ -2622,9 +2698,6 @@ function updatePickupRaycast() {
   setPickupPrompt(!!lookedPickable);
 }
 
-// =====================================================
-// BOSS PROMPT CLOSE LOGIC (after X, unfreeze)
-// =====================================================
 function updateBossPromptFreezeState() {
   if (!bossActive) return;
   if (!bossTutorialShowing) return;
@@ -2635,15 +2708,13 @@ function updateBossPromptFreezeState() {
   }
 }
 
-const SAVE_KEY = "teyvat_save_v2"; // bump version so old bad saves don't confuse things
-
-
+const SAVE_KEY = "teyvat_save_v2";
 
 function hasSave() {
   try {
     const v = localStorage.getItem(SAVE_KEY);
     if (!v) return false;
-    JSON.parse(v); // validate
+    JSON.parse(v);
     return true;
   } catch {
     return false;
@@ -2651,7 +2722,6 @@ function hasSave() {
 }
 
 function toast(msg) {
-  // lightweight toast using pickupPrompt styling
   pickupPrompt.textContent = msg;
   pickupPrompt.style.display = "block";
   pickupPrompt.style.background = "rgba(0,0,0,0.70)";
@@ -2686,7 +2756,6 @@ function applyPaperState(state) {
   const p = pickables[0];
   if (!p) return;
 
-  // remove current if any
   if (p.root) scene.remove(p.root);
 
   p.collected = !!state?.collected;
@@ -2696,14 +2765,12 @@ function applyPaperState(state) {
     return;
   }
 
-  // Reload paper model if needed
   const loader = new GLTFLoader();
   loader.load(
     "./assets/models/paper.glb",
     (gltf) => {
       const paperObj = gltf.scene;
 
-      // original scaling logic
       const box = new THREE.Box3().setFromObject(paperObj);
       const size = new THREE.Vector3();
       box.getSize(size);
@@ -2833,32 +2900,26 @@ function saveGame() {
     v: 2,
     t: Date.now(),
 
-    // player
     playerPos: vecToArr(obj.position),
     vY,
     onGround,
 
-    // high-level states
     introHasRun,
     introActive,
     gameplayLocked,
 
-    // HUD
     hudTaskLine,
     hudRulesVisible,
     hudTalkObjective,
 
-    // story/dialogue
     endingStage,
     badEndingTriggered,
     normalEndingTriggered,
 
-    // convo
     convoActive,
     convoIndex,
     hearts,
 
-    // paimon
     paimonType: getPaimonModelType(),
     paimonPos: paimon ? vecToArr(paimon.position) : null,
     paimonRotY: paimon ? paimon.rotation.y : 0,
@@ -2872,11 +2933,9 @@ function saveGame() {
       talkReady: PAIMON.talkReady,
     },
 
-    // items
     paper: getPaperState(),
     key: getKeyState(),
 
-    // boss
     bossActive,
     bossTutorialShowing,
     BOSS: {
@@ -2890,13 +2949,12 @@ function saveGame() {
       maxHP: PLAYER.maxHP,
     },
 
-    // held
     heldParticle,
   };
 
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify(data));
-    toast("Saved (S)");
+    toast("Saved (Ctrl+S)");
   } catch (e) {
     console.warn("Save failed:", e);
     toast("Save failed (storage blocked?)");
@@ -2924,20 +2982,17 @@ function loadGame() {
     return;
   }
 
-  // Close any UI that would block restore
   closeStoryPanel();
   closeDialogue();
   dialogueQueue = [];
   dialogueTyping = false;
 
-  // Reset prompts
   setPickupPrompt(false);
   setTalkPrompt(false);
   bossTutorialShowing = false;
 
-  // restore basics
   introHasRun = !!data.introHasRun;
-  introActive = false; // give control immediately after load
+  introActive = false;
   gameplayLocked = !!data.gameplayLocked;
 
   hudTaskLine = data.hudTaskLine ?? "";
@@ -2954,7 +3009,6 @@ function loadGame() {
   hearts = data.hearts ?? 3;
   updateDialogueStyle();
 
-  // boss restore
   bossActive = !!data.bossActive;
   BOSS.hp = data?.BOSS?.hp ?? BOSS.maxHP;
   BOSS.lastHitT = data?.BOSS?.lastHitT ?? 0;
@@ -2966,17 +3020,14 @@ function loadGame() {
   heldParticle = !!data.heldParticle;
   setHeldItem(heldParticle);
 
-  // restore player position
   const obj = controls.getObject();
   obj.position.copy(arrToVec(data.playerPos, new THREE.Vector3(0, EYE_HEIGHT, GATE_Z + 34)));
   vY = data.vY ?? 0;
   onGround = !!data.onGround;
 
-  // restore items
   applyPaperState(data.paper);
   applyKeyState(data.key);
 
-  // restore paimon + PAIMON state (async)
   const savedPType = data.paimonType ?? "normal";
   loadPaimonOfType(savedPType, () => {
     const st = data.PAIMON_STATE || {};
@@ -2994,7 +3045,6 @@ function loadGame() {
       yawFaceTarget(paimon, controls.getObject().position);
     }
 
-    // if key spawned, paimon should not be present
     if (data?.key?.spawned && !data?.key?.collected) {
       if (paimon) {
         scene.remove(paimon);
@@ -3005,27 +3055,21 @@ function loadGame() {
     }
   });
 
-  toast("Loaded ✓ (L)");
+  toast("Loaded \u2713 (L)");
 }
 
-// Hotkeys:
-//  - Ctrl+S (or Cmd+S on Mac) = Save
-//  - L = Load
 window.addEventListener("keydown", (e) => {
   if (e.repeat) return;
 
-  // Don't steal keys if user is typing somewhere
   const tag = document.activeElement?.tagName?.toLowerCase?.() || "";
   if (tag === "input" || tag === "textarea") return;
 
-  // SAVE: Ctrl+S / Cmd+S
   if ((e.ctrlKey || e.metaKey) && e.code === "KeyS") {
-    e.preventDefault(); // prevent browser Save Page dialog
+    e.preventDefault();
     saveGame();
     return;
   }
 
-  // LOAD: L
   if (e.code === "KeyL") {
     if (!controls.isLocked) {
       toast("Click Start first");
@@ -3035,27 +3079,23 @@ window.addEventListener("keydown", (e) => {
     return;
   }
 });
-
-// =====================================================
-// Animation loop
-// =====================================================
 let lastT = performance.now();
 function tick(t) {
   const dt = Math.min((t - lastT) / 1000, 0.05);
   lastT = t;
 
   resizeRendererToDisplaySize();
-  
-  // allow closing boss freeze prompt
+
+  // Camera zoom (scroll) + pan (Q/E)
+  updateCameraControls(dt);
+
   updateBossPromptFreezeState();
   applyWakeWobble(t);
-
 
   if (controls.isLocked) {
     const obj = controls.getObject();
     const prev = obj.position.clone();
 
-    // Movement locked on ending / story / dialogue / boss tutorial
     if (!introActive && !dialogueActive && storyPanel.style.display !== "flex" && !gameplayLocked && !bossTutorialShowing) {
       movePlayer(dt);
       resolveCollisionsAxisSeparated(prev);
@@ -3100,48 +3140,41 @@ function tick(t) {
     if (s.bob) s.mesh.position.y += Math.sin(t * 0.002 + (s.phase ?? 0)) * 0.003;
   }
 
-  // Paimon AI (only when NOT boss)
   if (!bossActive) updatePaimon(dt, t);
 
-  // Boss AI
   updateBossAI(dt, t);
-    // Boss lighting animation + attachment
-// Boss lighting animation + attachment (runs every frame)
-if (bossActive && paimon && bossLightsOn) {
-  const bp = paimon.position;
 
-  // Attach lights around boss
-  bossLights.key.position.set(bp.x + 3.2, bp.y + 5.5, bp.z + 3.2);
+  if (bossActive && paimon && bossLightsOn) {
+    const bp = paimon.position;
 
-  bossLights.rim.position.set(bp.x - 8.0, bp.y + 10.0, bp.z - 10.0);
-  bossLights.rim.target.position.set(bp.x, bp.y + 3.0, bp.z);
+    bossLights.key.position.set(bp.x + 3.2, bp.y + 5.5, bp.z + 3.2);
 
-  // Pulsing “panic” lights
-  const s1 = 0.65 + 0.35 * Math.sin(t * 0.006);
-  const s2 = 0.60 + 0.40 * Math.sin(t * 0.009 + 1.7);
+    bossLights.rim.position.set(bp.x - 8.0, bp.y + 10.0, bp.z - 10.0);
+    bossLights.rim.target.position.set(bp.x, bp.y + 3.0, bp.z);
 
-  bossLights.pulseA.intensity = 1.1 * s1;
-  bossLights.pulseB.intensity = 1.0 * s2;
+    const s1 = 0.65 + 0.35 * Math.sin(t * 0.006);
+    const s2 = 0.60 + 0.40 * Math.sin(t * 0.009 + 1.7);
 
-  bossLights.pulseA.position.set(
-    bp.x + 10 * Math.cos(t * 0.0012),
-    bp.y + 6.0,
-    bp.z + 10 * Math.sin(t * 0.0012)
-  );
-  bossLights.pulseB.position.set(
-    bp.x + 10 * Math.cos(t * 0.0012 + 2.2),
-    bp.y + 6.0,
-    bp.z + 10 * Math.sin(t * 0.0012 + 2.2)
-  );
-}
-    // click + hold to shoot anemo during boss fight
+    bossLights.pulseA.intensity = 1.1 * s1;
+    bossLights.pulseB.intensity = 1.0 * s2;
+
+    bossLights.pulseA.position.set(
+      bp.x + 10 * Math.cos(t * 0.0012),
+      bp.y + 6.0,
+      bp.z + 10 * Math.sin(t * 0.0012)
+    );
+    bossLights.pulseB.position.set(
+      bp.x + 10 * Math.cos(t * 0.0012 + 2.2),
+      bp.y + 6.0,
+      bp.z + 10 * Math.sin(t * 0.0012 + 2.2)
+    );
+  }
+
   if (anemoShooting) shootAnemoShot(t);
-  // projectiles
   updateProjectiles(dt);
 
-  // pickup + key prompt + particle prompt
   updatePickupRaycast();
-  // Talk prompt only when ready
+
   const canShowTalk =
     controls.isLocked &&
     !introActive &&
